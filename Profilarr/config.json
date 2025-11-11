@@ -1,6 +1,6 @@
 {
   "name": "Profilarr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "slug": "profilarr",
   "description": "A Sonarr/Radarr companion app for automating the setup of Custom Formats, Quality Profiles, and Naming Schemes",
   "url": "https://github.com/RFC1918-hub/Hassio-Addons",
@@ -26,6 +26,5 @@
     "UMASK": "str?",
     "TZ": "str?"
   },
-  "image": "santiagosayshey/profilarr",
   "map": ["config:rw"]
 }

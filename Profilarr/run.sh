@@ -17,5 +17,14 @@ echo "  PGID: $PGID"
 echo "  UMASK: $UMASK"
 echo "  TZ: $TZ"
 
-# Start Profilarr with the original entrypoint
-exec /init
+# Set timezone
+if [ -n "$TZ" ]; then
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
+    echo $TZ > /etc/timezone
+fi
+
+# Change to app directory
+cd /app
+
+# Start Profilarr
+exec npm start
