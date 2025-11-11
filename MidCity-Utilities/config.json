@@ -1,6 +1,6 @@
 {
   "name": "MidCity Utilities Sensor",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "slug": "midcity_utilities",
   "description": "Monitor your MidCity Utilities prepaid meters in Home Assistant",
   "url": "https://github.com/Hassio-Addons/MidCity-Utilities",
@@ -12,14 +12,17 @@
     "username": "",
     "password": "",
     "scan_interval": 300,
-    "log_level": "debug"
+    "log_level": "debug",
+    "ha_token": ""
   },
   "schema": {
     "username": "str",
     "password": "password",
     "scan_interval": "int(60,3600)?",
-    "log_level": "list(debug|info|warning|error)?"
+    "log_level": "list(debug|info|warning|error)?",
+    "ha_token": "str?"
   },
+  "auth_api": true,
   "homeassistant_api": true,
   "hassio_api": true,
   "hassio_role": "homeassistant",

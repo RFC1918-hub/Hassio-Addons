@@ -35,12 +35,14 @@ This add-on allows you to monitor your MidCity Utilities prepaid meters (electri
 
 ## Configuration
 
-After installation, configure the add-on with your MidCity Utilities credentials:
+After installation, configure the add-on with your MidCity Utilities credentials and Home Assistant token:
 
 ```yaml
 username: your_email@example.com
 password: your_password
 scan_interval: 300
+ha_token: your_long_lived_access_token
+log_level: info
 ```
 
 ### Configuration Options
@@ -50,6 +52,22 @@ scan_interval: 300
 | `username` | Yes | - | Your MidCity Utilities email/username |
 | `password` | Yes | - | Your MidCity Utilities password |
 | `scan_interval` | No | 300 | Update interval in seconds (minimum 60) |
+| `ha_token` | Yes* | - | Home Assistant Long-Lived Access Token |
+| `log_level` | No | info | Log level: debug, info, warning, or error |
+
+*Required to create sensors. See instructions below.
+
+### Creating a Long-Lived Access Token
+
+To allow the add-on to create sensors in Home Assistant:
+
+1. Click on your profile (bottom left in Home Assistant)
+2. Scroll down to **Long-Lived Access Tokens**
+3. Click **Create Token**
+4. Give it a name like "MidCity Utilities"
+5. Copy the token
+6. Paste it into the `ha_token` configuration field
+7. Save and restart the add-on
 
 ## Usage
 

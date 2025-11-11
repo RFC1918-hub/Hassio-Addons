@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - 2025-11-11
+
+### Fixed
+- Complete rewrite of parsing logic to handle separate meter number and balance elements
+- Meter number extracted from "Select Meter" text
+- Balance extracted from "Current meter balance" text
+- Both values now correctly combined into single meter entry
+
+### Added
+- Support for Long-Lived Access Token configuration (ha_token)
+- auth_api: true in config for proper authentication
+- Clear warning message with instructions when no token is configured
+- Fallback support for both SUPERVISOR_TOKEN and manually configured tokens
+
+### Improved
+- Simplified parsing - no longer tries to find everything in one element
+- Better logging showing which token type is being used
+- Clearer error messages explaining how to fix authentication issues
+
 ## [1.0.4] - 2025-11-11
 
 ### Fixed

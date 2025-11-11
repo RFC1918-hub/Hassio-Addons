@@ -19,13 +19,15 @@ logger = logging.getLogger(__name__)
 
 # Home Assistant Supervisor API configuration
 SUPERVISOR_TOKEN = os.environ.get('SUPERVISOR_TOKEN')
-HA_URL = 'http://supervisor/core/api'
 
-# Check if supervisor token is available
+# Try multiple API endpoints
 if SUPERVISOR_TOKEN:
-    logger.info("SUPERVISOR_TOKEN found")
+    HA_URL = 'http://supervisor/core/api'
+    logger.info("Using Supervisor API with SUPERVISOR_TOKEN")
 else:
-    logger.warning("SUPERVISOR_TOKEN not found - API calls may fail")
+    # Fallback: try to read HA token from options or use ingress
+    logger.warning("SUPERVISOR_TOKEN not found")
+    HA_URL = 'http://supervisor/core/api'
 
 # MidCity Utilities URLs
 LOGIN_URL = "https://buyprepaid.midcityutilities.co.za/ajax/login"
@@ -35,16 +37,26 @@ METER_URL = "https://buyprepaid.midcityutilities.co.za/meters"
 class MidCityUtilitiesSensor:
     """MidCity Utilities Sensor class."""
 
-    def __init__(self, username, password, scan_interval=300):
+    def __init__(self, username, password, scan_interval=300, ha_token=None):
         """Initialize the sensor."""
         self.username = username
         self.password = password
         self.scan_interval = scan_interval
         self.session = requests.Session()
-        self.headers = {
-            'Authorization': f'Bearer {SUPERVISOR_TOKEN}',
-            'Content-Type': 'application/json',
-        }
+
+        # Use provided token or SUPERVISOR_TOKEN
+        token = ha_token if ha_token else SUPERVISOR_TOKEN
+        if token:
+            logger.info(f"Using {'provided' if ha_token else 'SUPERVISOR'} token for HA API")
+            self.headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+            }
+            self.has_token = True
+        else:
+            logger.warning("No authentication token available for HA API")
+            self.headers = {'Content-Type': 'application/json'}
+            self.has_token = False
 
     def login(self):
         """Login to MidCity Utilities website."""
@@ -83,6 +95,71 @@ class MidCityUtilitiesSensor:
                 logger.info("Saved HTML to /tmp/meters_page.html for debugging")
             except Exception as e:
                 logger.warning(f"Could not save HTML for debugging: {e}")
+
+            # Parse the HTML content
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Log some info about the page structure
+            logger.info(f"Page title: {soup.title.string if soup.title else 'No title'}")
+
+            # Use a different strategy: find meter number and balance separately then combine
+            import re
+
+            # Find meter number
+            meter_number = None
+            meter_select = soup.find(string=re.compile(r'Select Meter'))
+            if meter_select:
+                match = re.search(r'(\d{8,12})', meter_select)
+                if match:
+                    meter_number = match.group(1)
+                    logger.info(f"Found meter number: {meter_number}")
+
+            # Find current balance
+            balance = None
+            unit = None
+            balance_text_elem = soup.find(string=re.compile(r'Current meter balance', re.I))
+            if balance_text_elem:
+                balance_text = balance_text_elem.strip()
+                logger.debug(f"Found balance text: {balance_text}")
+
+                # Extract kWh balance
+                match = re.search(r'([\d,]+\.?\d*)\s*kWh', balance_text, re.I)
+                if match:
+                    balance_str = match.group(1).replace(',', '')
+                    balance = float(balance_str)
+                    unit = 'kWh'
+                    logger.info(f"Found balance: {balance} {unit}")
+
+            # Create meter data if we found both
+            meters = []
+            if meter_number and balance is not None:
+                meter_data = {
+                    'meter_number': meter_number,
+                    'balance': balance,
+                    'meter_type': 'electricity',  # kWh indicates electricity
+                    'unit': unit,
+                    'last_updated': datetime.now().isoformat()
+                }
+                meters.append(meter_data)
+                logger.info(f"Successfully combined meter data: {meter_data}")
+            else:
+                logger.warning(f"Could not combine meter data - meter_number: {meter_number}, balance: {balance}")
+
+            logger.info(f"Retrieved data for {len(meters)} meter(s)")
+            return meters if meters else None
+
+        except Exception as e:
+            logger.error(f"Error retrieving meter data: {e}", exc_info=True)
+            return None
+
+    def get_meter_data_old(self):
+        """Old method - kept for reference."""
+        try:
+            response = self.session.get(METER_URL, timeout=30)
+
+            if response.status_code != 200:
+                logger.error(f"Failed to retrieve meter data. Status code: {response.status_code}")
+                return None
 
             # Parse the HTML content
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -358,8 +435,9 @@ class MidCityUtilitiesSensor:
     def update_ha_sensor(self, meter_data):
         """Update Home Assistant sensor using the REST API."""
         try:
-            if not SUPERVISOR_TOKEN:
-                logger.error("Cannot update sensors - SUPERVISOR_TOKEN not available")
+            if not self.has_token:
+                logger.error("Cannot update sensors - No authentication token available")
+                logger.info("Please configure a Long-Lived Access Token in the add-on configuration")
                 logger.info("Sensor data that would be created:")
                 for meter in meter_data:
                     logger.info(f"  - Meter {meter.get('meter_number')}: {meter.get('balance')} {meter.get('unit')}")
@@ -473,6 +551,7 @@ def main():
     password = config.get('password')
     scan_interval = config.get('scan_interval', 300)
     log_level = config.get('log_level', 'info').upper()
+    ha_token = config.get('ha_token', '').strip()
 
     # Update log level if specified in config
     logger.setLevel(getattr(logging, log_level, logging.INFO))
@@ -482,8 +561,21 @@ def main():
         logger.error("Username and password are required in configuration")
         sys.exit(1)
 
+    # Warn if no token provided
+    if not ha_token and not SUPERVISOR_TOKEN:
+        logger.warning("=" * 60)
+        logger.warning("NO HOME ASSISTANT TOKEN CONFIGURED!")
+        logger.warning("The add-on will fetch meter data but cannot create sensors.")
+        logger.warning("To fix this:")
+        logger.warning("1. Go to your Home Assistant profile")
+        logger.warning("2. Scroll down to 'Long-Lived Access Tokens'")
+        logger.warning("3. Click 'Create Token'")
+        logger.warning("4. Copy the token and add it to this add-on's configuration")
+        logger.warning("   under 'ha_token'")
+        logger.warning("=" * 60)
+
     # Create and run sensor
-    sensor = MidCityUtilitiesSensor(username, password, scan_interval)
+    sensor = MidCityUtilitiesSensor(username, password, scan_interval, ha_token if ha_token else None)
     sensor.run()
 
 
