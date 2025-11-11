@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.5
+
+- Fixed: Use su-exec instead of gosu (more compatible with Alpine)
+- Added symbolic link for gosu compatibility
+
 ## 1.0.4
 
 - Fixed: Install gosu package to support official entrypoint
