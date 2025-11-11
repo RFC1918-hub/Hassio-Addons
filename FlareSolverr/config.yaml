@@ -1,0 +1,46 @@
+name: FlareSolverr - Cloudflare Proxy
+version: 1.0.0
+slug: flaresolverr
+description: Proxy server to bypass Cloudflare and DDoS-GUARD protection.
+url: https://github.com/RFC1918-hub/Hassio-Add-ons
+webui: "http://[HOST]:[PORT:8191]"
+startup: services
+arch:
+  - amd64
+  - aarch64
+  - armv7
+init: false
+map:
+  - addon_config:rw
+ports:
+  8191/tcp: 8191
+ports_description:
+  8191/tcp: FlareSolverr API
+options:
+  LOG_LEVEL: info
+  TZ: UTC
+  HEADLESS: true
+schema:
+  LOG_LEVEL: list(debug|info|warning|error)?
+  LOG_FILE: str?
+  LOG_HTML: bool?
+  PROXY_URL: str?
+  PROXY_USERNAME: str?
+  PROXY_PASSWORD: password?
+  CAPTCHA_SOLVER: str?
+  TZ: str?
+  LANG: str?
+  HEADLESS: bool?
+  TEST_URL: str?
+  PROMETHEUS_ENABLED: bool?
+  PROMETHEUS_PORT: port?
+environment:
+  LOG_LEVEL: info
+  TZ: UTC
+  HEADLESS: "true"
+healthcheck:
+  test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8191/health', timeout=5)"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
