@@ -15,21 +15,6 @@ ports:
   6868/tcp: 6868
 ports_description:
   6868/tcp: Profilarr web interface
-options:
-  PUID: 1000
-  PGID: 1000
-  UMASK: "022"
-  TZ: UTC
-schema:
-  PUID: int
-  PGID: int
-  UMASK: str
-  TZ: str
-environment:
-  PUID: "1000"
-  PGID: "1000"
-  UMASK: "022"
-  TZ: "UTC"
 healthcheck:
   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6868/"]
   interval: 30s
