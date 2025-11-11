@@ -89,42 +89,108 @@ class MidCityUtilitiesSensor:
             # Try to find common container elements
             logger.info("Searching for meter data in HTML...")
 
-            # Try multiple strategies to find meters
+            # Try multiple strategies to find meters (NOT transaction history)
             meter_cards = []
 
-            # Strategy 1: Look for cards with common class names
-            meter_cards = soup.find_all('div', class_='meter-card')
+            # Strategy 1: Look for panel or well sections (common in Bootstrap)
+            meter_cards = soup.find_all('div', class_=['panel', 'well', 'panel-body'])
             if meter_cards:
-                logger.info(f"Found {len(meter_cards)} elements with class 'meter-card'")
+                logger.info(f"Found {len(meter_cards)} panel/well elements")
+                # Filter out elements that look like transaction history
+                meter_cards = [card for card in meter_cards if 'Product Type' not in card.get_text()]
 
-            # Strategy 2: Look for any card class
+            # Strategy 2: Look for cards (but not in tables)
             if not meter_cards:
-                meter_cards = soup.find_all('div', class_='card')
+                all_cards = soup.find_all('div', class_='card')
+                # Exclude cards that are inside tables or contain transaction data
+                meter_cards = []
+                for card in all_cards:
+                    text = card.get_text()
+                    # Skip if it's transaction history
+                    if 'Product Type' not in text and 'Download Invoice' not in text:
+                        meter_cards.append(card)
                 if meter_cards:
-                    logger.info(f"Found {len(meter_cards)} elements with class 'card'")
+                    logger.info(f"Found {len(meter_cards)} card elements (excluding transaction history)")
 
-            # Strategy 3: Look for table rows
+            # Strategy 3: Look for container divs with specific classes
             if not meter_cards:
-                meter_cards = soup.find_all('tr')
+                meter_cards = soup.find_all('div', class_=['meter-info', 'meter-display', 'account-info'])
                 if meter_cards:
-                    logger.info(f"Found {len(meter_cards)} table rows")
+                    logger.info(f"Found {len(meter_cards)} meter info containers")
 
-            # Strategy 4: Look for any div with data attributes
+            # Strategy 4: Look for divs that contain balance/credit info but aren't tables
             if not meter_cards:
-                meter_cards = soup.find_all('div', {'data-meter-id': True})
-                if meter_cards:
-                    logger.info(f"Found {len(meter_cards)} elements with data-meter-id")
+                # Find all divs, but exclude those in tables
+                all_divs = soup.find_all('div')
+                meter_cards = []
+                for div in all_divs:
+                    # Skip if parent is a table
+                    if div.find_parent('table'):
+                        continue
+                    text = div.get_text()
+                    # Look for divs with meter numbers or balance info
+                    if any(keyword in text.lower() for keyword in ['meter', 'balance', 'credit', 'account']):
+                        # But not transaction history
+                        if 'Product Type' not in text and 'Download Invoice' not in text:
+                            meter_cards.append(div)
 
-            # Strategy 5: Look for specific meter-related elements
-            if not meter_cards:
-                meter_cards = soup.select('[class*="meter"]')
+                # Limit to reasonable sized elements (not too small, not too large)
+                meter_cards = [c for c in meter_cards if 50 < len(c.get_text()) < 500]
                 if meter_cards:
-                    logger.info(f"Found {len(meter_cards)} elements with 'meter' in class name")
+                    logger.info(f"Found {len(meter_cards)} divs with meter-related content")
+
+            # Strategy 5: Look for the main content area
+            if not meter_cards:
+                main_content = soup.find('div', class_=['container', 'content', 'main-content'])
+                if main_content:
+                    # Get direct children that might be meter cards
+                    meter_cards = main_content.find_all('div', recursive=False)
+                    if meter_cards:
+                        logger.info(f"Found {len(meter_cards)} direct children of main content")
 
             if not meter_cards:
                 logger.warning("No meter cards found with any strategy")
-                # Log the page structure for debugging
-                logger.debug(f"Page structure: {soup.prettify()[:1000]}")
+                # Log useful page structure info for debugging
+                logger.info("=== Analyzing page structure for meter data ===")
+
+                # Look for all headings
+                headings = soup.find_all(['h1', 'h2', 'h3', 'h4'])
+                if headings:
+                    logger.info(f"Found {len(headings)} headings:")
+                    for h in headings[:10]:
+                        logger.info(f"  - {h.name}: {h.get_text(strip=True)[:100]}")
+
+                # Look for panels or sections
+                panels = soup.find_all('div', class_=['panel', 'well', 'section'])
+                if panels:
+                    logger.info(f"Found {len(panels)} panels/sections")
+                    for i, panel in enumerate(panels[:5]):
+                        text = panel.get_text(separator=' ', strip=True)[:200]
+                        logger.info(f"  Panel {i+1}: {text}")
+
+                # Look for forms (meters might be in a form)
+                forms = soup.find_all('form')
+                if forms:
+                    logger.info(f"Found {len(forms)} forms")
+                    for i, form in enumerate(forms):
+                        logger.info(f"  Form {i+1} action: {form.get('action', 'N/A')}")
+
+                # Look for spans/divs with 'R' (currency) outside tables
+                currency_elements = []
+                for elem in soup.find_all(['span', 'div', 'p']):
+                    if elem.find_parent('table'):
+                        continue
+                    text = elem.get_text(strip=True)
+                    if text.startswith('R ') or text.startswith('R\xa0'):
+                        currency_elements.append(elem)
+
+                if currency_elements:
+                    logger.info(f"Found {len(currency_elements)} currency elements outside tables:")
+                    for elem in currency_elements[:10]:
+                        parent_class = elem.parent.get('class', ['no-class'])
+                        logger.info(f"  - {elem.get_text(strip=True)} (parent: {parent_class})")
+
+                logger.info("=== End page structure analysis ===")
                 return None
 
             for card in meter_cards:

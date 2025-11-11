@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2025-11-11
+
+### Fixed
+- Exclude transaction history table rows from meter parsing
+- Focus on actual meter display elements (panels, cards, divs)
+- Filter out "Product Type" and "Download Invoice" elements
+
+### Improved
+- Enhanced page structure analysis when meters not found
+- Show headings, panels, forms, and currency elements
+- Better debugging information for troubleshooting HTML structure
+
 ## [1.0.2] - 2025-11-11
 
 ### Added
