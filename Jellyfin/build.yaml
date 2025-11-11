@@ -1,0 +1,4 @@
+build_from:
+  aarch64: "lscr.io/linuxserver/jellyfin:latest"
+  armv7: "lscr.io/linuxserver/jellyfin:latest"
+  amd64: "lscr.io/linuxserver/jellyfin:latest"
