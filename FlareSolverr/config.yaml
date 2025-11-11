@@ -1,5 +1,5 @@
 name: FlareSolverr - Cloudflare Proxy
-version: 1.0.3
+version: 1.0.4
 slug: flaresolverr
 description: Proxy server to bypass Cloudflare and DDoS-GUARD protection.
 url: https://github.com/RFC1918-hub/Hassio-Add-ons
@@ -42,7 +42,6 @@ environment:
   LOG_LEVEL: info
   TZ: UTC
   HEADLESS: "true"
-  CHROME_EXE_PATH: /usr/bin/chromium
 healthcheck:
   test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8191/health', timeout=5)"]
   interval: 30s
