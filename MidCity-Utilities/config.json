@@ -21,7 +21,6 @@
   "homeassistant_api": true,
   "hassio_api": true,
   "hassio_role": "default",
-  "image": "ghcr.io/hassio-addons/midcity-utilities-{arch}",
   "map": ["config:rw"],
   "environment": {
     "LOG_LEVEL": "info"
