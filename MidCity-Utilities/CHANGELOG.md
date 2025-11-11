@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2025-11-11
+
+### Changed
+- **BREAKING:** Switched from REST API to MQTT Discovery for sensor creation
+- Entities now properly created with unique_id for full UI management
+- Automatic device association - sensors grouped under "MidCity Utilities Sensor" device
+- No manual token configuration required
+- Uses Home Assistant's internal MQTT broker (Mosquitto)
+- Sensors fully manageable from UI (rename, change icon, assign to area, etc.)
+
+### Removed
+- Removed ha_token configuration option (no longer needed)
+- Removed ha_url configuration option (no longer needed)
+- Removed REST API sensor creation methods
+
+### Fixed
+- Entity unique_id issue resolved - entities can now be managed from UI
+- Automatic device registry integration via MQTT Discovery
+- Clean sensor organization without manual steps
+
 ## [1.1.1] - 2025-11-11
 
 ### Fixed

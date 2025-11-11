@@ -8,6 +8,7 @@ import time
 import logging
 from bs4 import BeautifulSoup
 from datetime import datetime
+import paho.mqtt.client as mqtt
 
 # Set up logging
 log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
@@ -17,16 +18,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Home Assistant API configuration
-SUPERVISOR_TOKEN = os.environ.get('SUPERVISOR_TOKEN')
-
-# Determine which API endpoint to use based on available token
-if SUPERVISOR_TOKEN:
-    HA_URL = 'http://supervisor/core/api'
-    logger.info("Using Supervisor API with SUPERVISOR_TOKEN")
-else:
-    # Use local HA API when using Long-Lived Access Token
-    logger.warning("SUPERVISOR_TOKEN not found - will use local HA API")
+# MQTT configuration for Home Assistant
+MQTT_HOST = "core-mosquitto"  # Home Assistant's internal MQTT broker
+MQTT_PORT = 1883
+MQTT_USER = os.environ.get('MQTT_USER', '')
+MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD', '')
 
 # MidCity Utilities URLs
 LOGIN_URL = "https://buyprepaid.midcityutilities.co.za/ajax/login"
@@ -36,37 +32,47 @@ METER_URL = "https://buyprepaid.midcityutilities.co.za/meters"
 class MidCityUtilitiesSensor:
     """MidCity Utilities Sensor class."""
 
-    def __init__(self, username, password, scan_interval=300, ha_token=None, ha_url=None):
+    def __init__(self, username, password, scan_interval=300):
         """Initialize the sensor."""
         self.username = username
         self.password = password
         self.scan_interval = scan_interval
         self.session = requests.Session()
 
-        # Use provided token or SUPERVISOR_TOKEN
-        token = ha_token if ha_token else SUPERVISOR_TOKEN
+        # Initialize MQTT client
+        self.mqtt_client = mqtt.Client()
 
-        if token:
-            # Determine API URL based on token type
-            if ha_token:
-                # Long-Lived Access Token - use provided URL or default
-                self.ha_url = ha_url if ha_url else 'http://homeassistant.local:8123/api'
-                logger.info(f"Using provided Long-Lived token with URL: {self.ha_url}")
-            else:
-                # SUPERVISOR_TOKEN - use supervisor endpoint
-                self.ha_url = 'http://supervisor/core/api'
-                logger.info(f"Using SUPERVISOR token with URL: {self.ha_url}")
+        # Set MQTT credentials if available
+        if MQTT_USER and MQTT_PASSWORD:
+            self.mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 
-            self.headers = {
-                'Authorization': f'Bearer {token}',
-                'Content-Type': 'application/json',
-            }
-            self.has_token = True
+        # Set MQTT callbacks
+        self.mqtt_client.on_connect = self.on_mqtt_connect
+        self.mqtt_client.on_disconnect = self.on_mqtt_disconnect
+
+        self.mqtt_connected = False
+
+        # Connect to MQTT broker
+        try:
+            logger.info(f"Connecting to MQTT broker at {MQTT_HOST}:{MQTT_PORT}")
+            self.mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
+            self.mqtt_client.loop_start()
+        except Exception as e:
+            logger.error(f"Failed to connect to MQTT broker: {e}")
+
+    def on_mqtt_connect(self, client, userdata, flags, rc):
+        """MQTT connection callback."""
+        if rc == 0:
+            logger.info("Successfully connected to MQTT broker")
+            self.mqtt_connected = True
         else:
-            logger.warning("No authentication token available for HA API")
-            self.headers = {'Content-Type': 'application/json'}
-            self.has_token = False
-            self.ha_url = None
+            logger.error(f"Failed to connect to MQTT broker with code: {rc}")
+            self.mqtt_connected = False
+
+    def on_mqtt_disconnect(self, client, userdata, rc):
+        """MQTT disconnection callback."""
+        logger.warning(f"Disconnected from MQTT broker with code: {rc}")
+        self.mqtt_connected = False
 
     def login(self):
         """Login to MidCity Utilities website."""
@@ -510,174 +516,26 @@ class MidCityUtilitiesSensor:
 
         return meter_data if meter_data.get('meter_number') and meter_data.get('balance') is not None else None
 
-    def get_or_create_device(self):
-        """Get or create MidCity Utilities device."""
+    def publish_mqtt_discovery(self, meter_data):
+        """Publish MQTT Discovery messages for Home Assistant."""
         try:
-            # Try to get device registry
-            response = requests.get(
-                f'{self.ha_url.replace("/api", "")}/api/config/device_registry/list',
-                headers=self.headers,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                devices = response.json()
-                # Look for our device by identifiers
-                midcity_device = next(
-                    (dev for dev in devices
-                     if any('midcity_utilities' in str(identifier).lower()
-                           for identifier in dev.get('identifiers', []))),
-                    None
-                )
-
-                if midcity_device:
-                    device_id = midcity_device.get('id')
-                    logger.debug(f"Found existing MidCity device with ID: {device_id}")
-                    return device_id
-                else:
-                    # Device doesn't exist, we'll return None and let entity be created without device
-                    logger.debug("MidCity device not found, sensor will be created without device association")
-                    return None
-            else:
-                logger.debug(f"Could not access device registry: {response.status_code}")
-                return None
-
-        except Exception as e:
-            logger.debug(f"Could not access device registry: {e}")
-            return None
-
-    def register_entity_in_registry(self, entity_id, unique_id, device_id, friendly_name, device_class, icon, unit_of_measurement):
-        """Register entity in entity registry with unique_id before creating state."""
-        try:
-            # Check if entity already exists in registry
-            response = requests.get(
-                f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/get',
-                headers=self.headers,
-                params={'entity_id': entity_id},
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                # Entity already exists in registry
-                logger.debug(f"Entity {entity_id} already registered in entity registry")
-
-                # Update device association if needed
-                if device_id:
-                    update_response = requests.post(
-                        f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/update',
-                        headers=self.headers,
-                        json={
-                            'entity_id': entity_id,
-                            'device_id': device_id
-                        },
-                        timeout=10
-                    )
-                    if update_response.status_code == 200:
-                        logger.debug(f"Updated device association for {entity_id}")
-
-                return True
-            else:
-                # Entity doesn't exist, create it in registry with unique_id
-                logger.info(f"Registering new entity {entity_id} in entity registry with unique_id...")
-
-                create_data = {
-                    'entity_id': entity_id,
-                    'unique_id': unique_id,
-                    'platform': 'midcity_utilities',
-                    'name': friendly_name,
-                    'icon': icon
-                }
-
-                # Add device_id if available
-                if device_id:
-                    create_data['device_id'] = device_id
-
-                create_response = requests.post(
-                    f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/create',
-                    headers=self.headers,
-                    json=create_data,
-                    timeout=10
-                )
-
-                if create_response.status_code in [200, 201]:
-                    logger.info(f"Successfully registered {entity_id} in entity registry with unique_id: {unique_id}")
-                    return True
-                else:
-                    logger.warning(f"Could not register entity in registry: {create_response.status_code} - {create_response.text}")
-                    # Continue anyway - state creation might still work
-                    return False
-
-        except Exception as e:
-            logger.warning(f"Could not register entity in registry: {e}")
-            # Continue anyway - state creation might still work
-            return False
-
-    def register_entity_with_device(self, entity_id, device_id):
-        """Register entity in entity registry with device association."""
-        if not device_id:
-            return False
-
-        try:
-            # Get entity registry entry
-            response = requests.get(
-                f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/get',
-                headers=self.headers,
-                params={'entity_id': entity_id},
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                # Entity exists in registry, update it
-                logger.info(f"Updating entity {entity_id} to associate with device...")
-                update_response = requests.post(
-                    f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/update',
-                    headers=self.headers,
-                    json={
-                        'entity_id': entity_id,
-                        'device_id': device_id
-                    },
-                    timeout=10
-                )
-
-                if update_response.status_code == 200:
-                    logger.info(f"Successfully associated {entity_id} with MidCity device")
-                    return True
-                else:
-                    logger.debug(f"Could not update entity: {update_response.status_code} - {update_response.text}")
-                    return False
-            else:
-                # Entity not in registry yet, it will be registered on first state update
-                logger.debug("Entity not yet in registry, will be registered on next update")
-                return False
-
-        except Exception as e:
-            logger.debug(f"Could not register entity with device: {e}")
-            return False
-
-    def update_ha_sensor(self, meter_data):
-        """Update Home Assistant sensor using the REST API."""
-        try:
-            if not self.has_token:
-                logger.error("Cannot update sensors - No authentication token available")
-                logger.info("Please configure a Long-Lived Access Token in the add-on configuration")
+            if not self.mqtt_connected:
+                logger.error("Cannot publish sensors - MQTT not connected")
                 logger.info("Sensor data that would be created:")
                 for meter in meter_data:
                     logger.info(f"  - Meter {meter.get('meter_number')}: {meter.get('balance')} {meter.get('unit')}")
                 return
-
-            # Get or create device
-            device_id = self.get_or_create_device()
 
             for meter in meter_data:
                 meter_number = meter.get('meter_number', 'unknown')
                 balance = meter.get('balance', 0)
                 meter_type = meter.get('meter_type', 'unknown')
                 unit = meter.get('unit', 'kWh')
+                predicted_zero_date = meter.get('predicted_zero_date', None)
 
-                # Create unique entity_id and unique_id
-                entity_id = f"sensor.midcity_{meter_type}_{meter_number.replace(' ', '_').lower()}"
-                # unique_id should be stable and unique (without the sensor. prefix)
+                # Create unique_id for this sensor
                 unique_id = f"midcity_{meter_type}_{meter_number}"
+                object_id = f"midcity_{meter_type}_{meter_number}"
 
                 # Determine device class and icon based on meter type
                 if meter_type == 'electricity':
@@ -696,61 +554,71 @@ class MidCityUtilitiesSensor:
                 # Friendly name for the entity
                 friendly_name = f'MidCity {meter_type.title()}'
 
-                # Register entity in entity registry BEFORE creating state
-                # This ensures the entity has a unique_id for UI management
-                self.register_entity_in_registry(
-                    entity_id=entity_id,
-                    unique_id=unique_id,
-                    device_id=device_id,
-                    friendly_name=friendly_name,
-                    device_class=device_class,
-                    icon=icon,
-                    unit_of_measurement=unit_of_measurement
+                # MQTT topics
+                config_topic = f"homeassistant/sensor/midcity_utilities/{object_id}/config"
+                state_topic = f"homeassistant/sensor/midcity_utilities/{object_id}/state"
+                attributes_topic = f"homeassistant/sensor/midcity_utilities/{object_id}/attributes"
+
+                # Discovery payload
+                discovery_payload = {
+                    "name": friendly_name,
+                    "unique_id": unique_id,
+                    "object_id": object_id,
+                    "state_topic": state_topic,
+                    "json_attributes_topic": attributes_topic,
+                    "unit_of_measurement": unit_of_measurement,
+                    "device_class": device_class,
+                    "icon": icon,
+                    "state_class": "measurement",
+                    "device": {
+                        "identifiers": ["midcity_utilities_sensor"],
+                        "name": "MidCity Utilities Sensor",
+                        "model": "MidCity Utilities Monitor",
+                        "manufacturer": "MidCity Utilities",
+                        "sw_version": "1.2.0"
+                    }
+                }
+
+                # Publish discovery message
+                logger.info(f"Publishing MQTT discovery for {unique_id}")
+                self.mqtt_client.publish(
+                    config_topic,
+                    json.dumps(discovery_payload),
+                    retain=True
                 )
 
-                # Prepare state data
+                # Publish state
+                logger.debug(f"Publishing state: {balance}")
+                self.mqtt_client.publish(
+                    state_topic,
+                    str(balance),
+                    retain=True
+                )
+
+                # Publish attributes
                 attributes = {
                     'meter_number': meter_number,
                     'meter_type': meter_type,
-                    'unit_of_measurement': unit_of_measurement,
-                    'device_class': device_class,
-                    'friendly_name': friendly_name,
                     'last_updated': meter.get('last_updated'),
-                    'icon': icon,
                     'attribution': 'Data from MidCity Utilities'
                 }
 
                 # Add predicted zero date if available
-                if meter.get('predicted_zero_date'):
-                    attributes['predicted_zero_date'] = meter.get('predicted_zero_date')
-                    logger.debug(f"Adding predicted zero date to sensor: {meter.get('predicted_zero_date')}")
+                if predicted_zero_date:
+                    attributes['predicted_zero_date'] = predicted_zero_date
+                    logger.debug(f"Adding predicted zero date to attributes: {predicted_zero_date}")
 
-                state_data = {
-                    'state': balance,
-                    'attributes': attributes
-                }
-
-                logger.debug(f"Attempting to create/update sensor: {entity_id}")
-                logger.debug(f"API URL: {self.ha_url}/states/{entity_id}")
-                logger.debug(f"State data: {state_data}")
-
-                # Update state via Home Assistant API
-                response = requests.post(
-                    f'{self.ha_url}/states/{entity_id}',
-                    headers=self.headers,
-                    json=state_data,
-                    timeout=10
+                logger.debug(f"Publishing attributes: {attributes}")
+                self.mqtt_client.publish(
+                    attributes_topic,
+                    json.dumps(attributes),
+                    retain=True
                 )
 
-                if response.status_code in [200, 201]:
-                    logger.info(f"Successfully updated sensor: {entity_id} = {balance} {unit_of_measurement}")
-                else:
-                    logger.error(f"Failed to update sensor {entity_id}: {response.status_code} - {response.text}")
-                    logger.debug(f"Request headers: {self.headers}")
-                    logger.debug(f"SUPERVISOR_TOKEN available: {bool(SUPERVISOR_TOKEN)}")
+                logger.info(f"Successfully published sensor: sensor.{object_id} = {balance} {unit_of_measurement}")
 
         except Exception as e:
-            logger.error(f"Error updating Home Assistant sensor: {e}", exc_info=True)
+            logger.error(f"Error publishing MQTT discovery: {e}", exc_info=True)
 
     def run(self):
         """Main run loop."""
@@ -771,8 +639,8 @@ class MidCityUtilitiesSensor:
                 meter_data = self.get_meter_data()
 
                 if meter_data:
-                    # Update Home Assistant sensors
-                    self.update_ha_sensor(meter_data)
+                    # Publish MQTT Discovery messages
+                    self.publish_mqtt_discovery(meter_data)
                 else:
                     logger.warning("No meter data retrieved")
 
@@ -801,8 +669,6 @@ def main():
     password = config.get('password')
     scan_interval = config.get('scan_interval', 300)
     log_level = config.get('log_level', 'info').upper()
-    ha_token = config.get('ha_token', '').strip()
-    ha_url = config.get('ha_url', '').strip()
 
     # Update log level if specified in config
     logger.setLevel(getattr(logging, log_level, logging.INFO))
@@ -812,26 +678,11 @@ def main():
         logger.error("Username and password are required in configuration")
         sys.exit(1)
 
-    # Warn if no token provided
-    if not ha_token and not SUPERVISOR_TOKEN:
-        logger.warning("=" * 60)
-        logger.warning("NO HOME ASSISTANT TOKEN CONFIGURED!")
-        logger.warning("The add-on will fetch meter data but cannot create sensors.")
-        logger.warning("To fix this:")
-        logger.warning("1. Go to your Home Assistant profile")
-        logger.warning("2. Scroll down to 'Long-Lived Access Tokens'")
-        logger.warning("3. Click 'Create Token'")
-        logger.warning("4. Copy the token and add it to this add-on's configuration")
-        logger.warning("   under 'ha_token'")
-        logger.warning("=" * 60)
-
     # Create and run sensor
     sensor = MidCityUtilitiesSensor(
         username,
         password,
-        scan_interval,
-        ha_token if ha_token else None,
-        ha_url if ha_url else None
+        scan_interval
     )
     sensor.run()
 

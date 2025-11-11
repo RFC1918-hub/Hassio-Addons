@@ -8,11 +8,15 @@ This add-on allows you to monitor your MidCity Utilities prepaid meters (electri
 
 ## Features
 
-- Native Home Assistant sensor entities (no MQTT required)
+- Native Home Assistant sensor entities via MQTT Discovery
 - Automatic meter discovery
+- Entities with unique_id for full UI management
+- Automatic device grouping - sensors appear under "MidCity Utilities Sensor" device
 - Configurable scan interval
 - Support for multiple meters
-- Displays balance in South African Rand (ZAR)
+- Displays balance in kWh for electricity meters
+- Extracts predicted zero balance date
+- Full UI customization support (rename, change icon, assign to area)
 
 ## Installation
 
@@ -35,13 +39,12 @@ This add-on allows you to monitor your MidCity Utilities prepaid meters (electri
 
 ## Configuration
 
-After installation, configure the add-on with your MidCity Utilities credentials and Home Assistant token:
+After installation, configure the add-on with your MidCity Utilities credentials:
 
 ```yaml
 username: your_email@example.com
 password: your_password
 scan_interval: 300
-ha_token: your_long_lived_access_token
 log_level: info
 ```
 
@@ -52,61 +55,47 @@ log_level: info
 | `username` | Yes | - | Your MidCity Utilities email/username |
 | `password` | Yes | - | Your MidCity Utilities password |
 | `scan_interval` | No | 300 | Update interval in seconds (minimum 60) |
-| `ha_token` | Yes* | - | Home Assistant Long-Lived Access Token |
 | `log_level` | No | info | Log level: debug, info, warning, or error |
 
-*Required to create sensors. See instructions below.
+### Prerequisites
 
-### Creating a Long-Lived Access Token
+This add-on requires the **Mosquitto broker** add-on to be installed and running for MQTT Discovery. If you don't have it:
 
-To allow the add-on to create sensors in Home Assistant:
-
-1. Click on your profile (bottom left in Home Assistant)
-2. Scroll down to **Long-Lived Access Tokens**
-3. Click **Create Token**
-4. Give it a name like "MidCity Utilities"
-5. Copy the token
-6. Paste it into the `ha_token` configuration field
-7. Save and restart the add-on
+1. Go to **Settings** → **Add-ons** → **Add-on Store**
+2. Search for "Mosquitto broker"
+3. Click **Install**
+4. Start the Mosquitto broker add-on
+5. Then configure and start this add-on
 
 ## Usage
 
-1. Configure the add-on with your credentials
-2. Start the add-on
-3. Check the logs to ensure successful connection
-4. Sensors will be automatically created with entity IDs like:
+1. Install and start the Mosquitto broker add-on (if not already installed)
+2. Configure this add-on with your MidCity Utilities credentials
+3. Start the add-on
+4. Check the logs to ensure successful connection
+5. Sensors will be automatically created via MQTT Discovery with entity IDs like:
    - `sensor.midcity_electricity_<meter_number>`
    - `sensor.midcity_water_<meter_number>`
-
-### Organizing Your Sensors
-
-To remove sensors from "Ungrouped" and organize them:
-
-**Option 1: Assign to an Area**
-1. Go to Settings → Devices & Services → Entities
-2. Find your MidCity sensors
-3. Click on each sensor
-4. Click "Settings" (gear icon)
-5. Select an Area (e.g., "Utility Room" or create "MidCity Utilities")
-
-**Option 2: Create a Helper Group**
-1. Go to Settings → Devices & Services → Helpers
-2. Click "Create Helper" → "Group"
-3. Name it "MidCity Utilities"
-4. Add your MidCity sensors to the group
-5. The group will appear as a single entity with all sensors inside
+6. Sensors automatically appear under the "MidCity Utilities Sensor" device
+7. All sensors are fully manageable from the UI (Settings → Devices & Services → Entities)
 
 ## Sensor Entities
 
-The add-on creates sensor entities with the following attributes:
+The add-on creates sensor entities with the following properties:
 
-- **State**: Current balance in ZAR
+- **State**: Current balance (kWh for electricity, m³ for water)
+- **Unique ID**: Automatically assigned for UI management
+- **Device**: Grouped under "MidCity Utilities Sensor"
 - **Attributes**:
   - `meter_number`: Your meter number
   - `meter_type`: Type of meter (electricity/water)
   - `last_updated`: Timestamp of last update
-  - `unit_of_measurement`: ZAR
-  - `device_class`: monetary
+  - `predicted_zero_date`: Date when balance expected to reach zero
+  - `attribution`: "Data from MidCity Utilities"
+- **Properties**:
+  - `unit_of_measurement`: kWh (electricity), m³ (water), or ZAR
+  - `device_class`: energy (electricity), water (water), or monetary
+  - `icon`: Lightning bolt (electricity), water drop (water)
 
 ## Example Automation
 
@@ -155,6 +144,13 @@ If you encounter issues:
 3. Open an issue on GitHub with relevant log entries
 
 ## Changelog
+
+### Version 1.2.0
+- **BREAKING:** Switched to MQTT Discovery for proper entity creation
+- Entities now have unique_id for full UI management
+- Automatic device grouping under "MidCity Utilities Sensor"
+- No manual token configuration required
+- Sensors fully customizable from UI
 
 ### Version 1.0.0
 - Initial release
