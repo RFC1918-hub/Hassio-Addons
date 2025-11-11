@@ -29,23 +29,8 @@ This add-on packages Profilarr for easy installation on Home Assistant.
 ## Configuration
 
 ```yaml
-PUID: 1000
-PGID: 1000
-UMASK: "022"
 TZ: "UTC"
 ```
-
-### Option: `PUID`
-
-The user ID to run Profilarr as. Default is `1000`.
-
-### Option: `PGID`
-
-The group ID to run Profilarr as. Default is `1000`.
-
-### Option: `UMASK`
-
-The umask to use for file creation. Default is `022`.
 
 ### Option: `TZ`
 

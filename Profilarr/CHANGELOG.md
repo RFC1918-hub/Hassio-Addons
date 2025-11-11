@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+- Fixed: Use COPY --from to extract official Profilarr Docker image
+- Simplified configuration (removed PUID/PGID/UMASK as not needed)
+- Use official entrypoint from Profilarr image
+
 ## 1.0.2
 
 - Fixed: Use Home Assistant base images for proper architecture support

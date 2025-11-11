@@ -1,6 +1,6 @@
 {
   "name": "Profilarr",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "slug": "profilarr",
   "description": "A Sonarr/Radarr companion app for automating the setup of Custom Formats, Quality Profiles, and Naming Schemes",
   "url": "https://github.com/RFC1918-hub/Hassio-Addons",
@@ -15,15 +15,9 @@
     "6868/tcp": "Web interface"
   },
   "options": {
-    "PUID": 1000,
-    "PGID": 1000,
-    "UMASK": "022",
     "TZ": "UTC"
   },
   "schema": {
-    "PUID": "int?",
-    "PGID": "int?",
-    "UMASK": "str?",
     "TZ": "str?"
   },
   "map": ["config:rw"]
