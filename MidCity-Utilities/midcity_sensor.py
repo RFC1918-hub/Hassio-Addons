@@ -656,7 +656,7 @@ class MidCityUtilitiesSensor:
                         "name": "MidCity Utilities Sensor",
                         "model": "MidCity Utilities Monitor",
                         "manufacturer": "MidCity Utilities",
-                        "sw_version": "1.2.3"
+                        "sw_version": "1.2.4"
                     }
                 }
 
@@ -705,6 +705,20 @@ class MidCityUtilitiesSensor:
         """Main run loop."""
         logger.info("Starting MidCity Utilities sensor...")
         logger.info(f"Scan interval: {self.scan_interval} seconds")
+
+        # Wait for MQTT connection to be established
+        logger.info("Waiting for MQTT connection...")
+        max_wait = 30  # Wait up to 30 seconds
+        wait_time = 0
+        while not self.mqtt_connected and wait_time < max_wait:
+            time.sleep(1)
+            wait_time += 1
+
+        if self.mqtt_connected:
+            logger.info("✓ MQTT connection established, starting sensor loop")
+        else:
+            logger.warning(f"MQTT connection not established after {max_wait} seconds")
+            logger.warning("Will continue anyway, but sensors may not be published")
 
         while True:
             try:

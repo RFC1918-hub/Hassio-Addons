@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.4] - 2025-11-11
+
+### Fixed
+- Wait for MQTT connection before starting sensor loop
+- Prevent race condition where sensor tries to publish before MQTT connects
+- Add 30-second timeout for MQTT connection establishment
+- Better logging showing MQTT connection wait status
+
 ## [1.2.3] - 2025-11-11
 
 ### Added
