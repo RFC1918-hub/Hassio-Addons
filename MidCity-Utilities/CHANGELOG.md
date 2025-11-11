@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2025-11-11
+
+### Fixed
+- Fixed Docker image registry error by removing external image reference
+- Fixed bashio unbound variable error in run.sh script
+- Simplified run.sh to use standard bash instead of bashio functions
+- Added explicit bash package to Dockerfile
+- Add-on now builds locally instead of pulling from GitHub Container Registry
+
 ## [1.0.0] - 2025-11-11
 
 ### Added
