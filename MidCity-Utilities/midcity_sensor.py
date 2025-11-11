@@ -33,7 +33,7 @@ METER_URL = "https://buyprepaid.midcityutilities.co.za/meters"
 class MidCityUtilitiesSensor:
     """MidCity Utilities Sensor class."""
 
-    def __init__(self, username, password, scan_interval=300):
+    def __init__(self, username, password, scan_interval=300, mqtt_user=None, mqtt_password=None):
         """Initialize the sensor."""
         self.username = username
         self.password = password
@@ -44,10 +44,21 @@ class MidCityUtilitiesSensor:
         mqtt_config = self.get_mqtt_config()
         self.mqtt_host = mqtt_config.get('host', 'core-mosquitto')
         self.mqtt_port = mqtt_config.get('port', 1883)
-        self.mqtt_user = mqtt_config.get('username') or mqtt_config.get('user')
-        self.mqtt_password = mqtt_config.get('password')
 
-        logger.info(f"MQTT Config - Host: {self.mqtt_host}, Port: {self.mqtt_port}, User: {self.mqtt_user}")
+        # Use manually configured MQTT credentials if provided, otherwise use Supervisor config
+        if mqtt_user and mqtt_password:
+            self.mqtt_user = mqtt_user
+            self.mqtt_password = mqtt_password
+            logger.info("Using manually configured MQTT credentials from add-on options")
+        else:
+            self.mqtt_user = mqtt_config.get('username') or mqtt_config.get('user')
+            self.mqtt_password = mqtt_config.get('password')
+            if self.mqtt_user and self.mqtt_password:
+                logger.info("Using MQTT credentials from Supervisor services")
+            else:
+                logger.info("No MQTT credentials configured - attempting anonymous connection")
+
+        logger.info(f"MQTT Config - Host: {self.mqtt_host}, Port: {self.mqtt_port}, User: {self.mqtt_user or 'anonymous'}")
 
         # Initialize MQTT client
         self.mqtt_client = mqtt.Client()
@@ -645,7 +656,7 @@ class MidCityUtilitiesSensor:
                         "name": "MidCity Utilities Sensor",
                         "model": "MidCity Utilities Monitor",
                         "manufacturer": "MidCity Utilities",
-                        "sw_version": "1.2.2"
+                        "sw_version": "1.2.3"
                     }
                 }
 
@@ -739,6 +750,8 @@ def main():
     password = config.get('password')
     scan_interval = config.get('scan_interval', 300)
     log_level = config.get('log_level', 'info').upper()
+    mqtt_user = config.get('mqtt_user', '').strip()
+    mqtt_password = config.get('mqtt_password', '').strip()
 
     # Update log level if specified in config
     logger.setLevel(getattr(logging, log_level, logging.INFO))
@@ -752,7 +765,9 @@ def main():
     sensor = MidCityUtilitiesSensor(
         username,
         password,
-        scan_interval
+        scan_interval,
+        mqtt_user if mqtt_user else None,
+        mqtt_password if mqtt_password else None
     )
     sensor.run()
 

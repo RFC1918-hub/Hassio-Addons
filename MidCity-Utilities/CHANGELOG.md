@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.3] - 2025-11-11
+
+### Added
+- Manual MQTT credentials configuration options
+- Add `mqtt_user` configuration option for MQTT username
+- Add `mqtt_password` configuration option for MQTT password
+- Fallback to manually configured credentials if Supervisor doesn't provide them
+
+### Changed
+- Manual MQTT credentials take precedence over Supervisor-provided credentials
+- Better logging to indicate which credential source is being used
+
 ## [1.2.2] - 2025-11-11
 
 ### Fixed
