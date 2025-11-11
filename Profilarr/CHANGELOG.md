@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+- Fixed: Start Profilarr directly using node instead of entrypoint script
+- Install Node.js and Python dependencies
+- Simplified startup process
+
 ## 1.0.5
 
 - Fixed: Use su-exec instead of gosu (more compatible with Alpine)

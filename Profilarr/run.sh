@@ -17,8 +17,15 @@ if [ -n "$TZ" ]; then
     echo $TZ > /etc/timezone || true
 fi
 
-# Map config directory
+# Set config directory
 export CONFIG_DIR=/config
 
-# Start Profilarr using the original entrypoint
-exec /entrypoint.sh
+# Ensure config directory exists
+mkdir -p /config
+
+# Change to app directory
+cd /app
+
+# Start the backend
+echo "Starting Profilarr backend and frontend..."
+exec node backend/server.js
