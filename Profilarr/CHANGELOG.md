@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Fixed: Use Home Assistant base images for proper architecture support
+
 ## 1.0.1
 
 - Fixed: Build from source instead of using non-existent Docker image
