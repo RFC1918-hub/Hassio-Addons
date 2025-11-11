@@ -17,17 +17,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Home Assistant Supervisor API configuration
+# Home Assistant API configuration
 SUPERVISOR_TOKEN = os.environ.get('SUPERVISOR_TOKEN')
 
-# Try multiple API endpoints
+# Determine which API endpoint to use based on available token
 if SUPERVISOR_TOKEN:
     HA_URL = 'http://supervisor/core/api'
     logger.info("Using Supervisor API with SUPERVISOR_TOKEN")
 else:
-    # Fallback: try to read HA token from options or use ingress
-    logger.warning("SUPERVISOR_TOKEN not found")
-    HA_URL = 'http://supervisor/core/api'
+    # Use local HA API when using Long-Lived Access Token
+    logger.warning("SUPERVISOR_TOKEN not found - will use local HA API")
 
 # MidCity Utilities URLs
 LOGIN_URL = "https://buyprepaid.midcityutilities.co.za/ajax/login"
@@ -37,7 +36,7 @@ METER_URL = "https://buyprepaid.midcityutilities.co.za/meters"
 class MidCityUtilitiesSensor:
     """MidCity Utilities Sensor class."""
 
-    def __init__(self, username, password, scan_interval=300, ha_token=None):
+    def __init__(self, username, password, scan_interval=300, ha_token=None, ha_url=None):
         """Initialize the sensor."""
         self.username = username
         self.password = password
@@ -46,8 +45,18 @@ class MidCityUtilitiesSensor:
 
         # Use provided token or SUPERVISOR_TOKEN
         token = ha_token if ha_token else SUPERVISOR_TOKEN
+
         if token:
-            logger.info(f"Using {'provided' if ha_token else 'SUPERVISOR'} token for HA API")
+            # Determine API URL based on token type
+            if ha_token:
+                # Long-Lived Access Token - use provided URL or default
+                self.ha_url = ha_url if ha_url else 'http://homeassistant.local:8123/api'
+                logger.info(f"Using provided Long-Lived token with URL: {self.ha_url}")
+            else:
+                # SUPERVISOR_TOKEN - use supervisor endpoint
+                self.ha_url = 'http://supervisor/core/api'
+                logger.info(f"Using SUPERVISOR token with URL: {self.ha_url}")
+
             self.headers = {
                 'Authorization': f'Bearer {token}',
                 'Content-Type': 'application/json',
@@ -57,6 +66,7 @@ class MidCityUtilitiesSensor:
             logger.warning("No authentication token available for HA API")
             self.headers = {'Content-Type': 'application/json'}
             self.has_token = False
+            self.ha_url = None
 
     def login(self):
         """Login to MidCity Utilities website."""
@@ -525,12 +535,12 @@ class MidCityUtilitiesSensor:
                 }
 
                 logger.debug(f"Attempting to create/update sensor: {entity_id}")
-                logger.debug(f"API URL: {HA_URL}/states/{entity_id}")
+                logger.debug(f"API URL: {self.ha_url}/states/{entity_id}")
                 logger.debug(f"State data: {state_data}")
 
                 # Update state via Home Assistant API
                 response = requests.post(
-                    f'{HA_URL}/states/{entity_id}',
+                    f'{self.ha_url}/states/{entity_id}',
                     headers=self.headers,
                     json=state_data,
                     timeout=10
@@ -596,6 +606,7 @@ def main():
     scan_interval = config.get('scan_interval', 300)
     log_level = config.get('log_level', 'info').upper()
     ha_token = config.get('ha_token', '').strip()
+    ha_url = config.get('ha_url', '').strip()
 
     # Update log level if specified in config
     logger.setLevel(getattr(logging, log_level, logging.INFO))
@@ -619,7 +630,13 @@ def main():
         logger.warning("=" * 60)
 
     # Create and run sensor
-    sensor = MidCityUtilitiesSensor(username, password, scan_interval, ha_token if ha_token else None)
+    sensor = MidCityUtilitiesSensor(
+        username,
+        password,
+        scan_interval,
+        ha_token if ha_token else None,
+        ha_url if ha_url else None
+    )
     sensor.run()
 
 

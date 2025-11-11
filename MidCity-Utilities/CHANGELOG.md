@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - 2025-11-11
+
+### Fixed
+- Fixed 401 Unauthorized error with Long-Lived Access Tokens
+- Long-Lived tokens now use correct API endpoint (homeassistant.local:8123/api)
+- SUPERVISOR_TOKEN continues to use supervisor/core/api endpoint
+
+### Added
+- host_network: true for proper network access to HA from add-on
+- ha_url configuration option to customize Home Assistant API URL
+- Default ha_url: http://homeassistant.local:8123/api
+- Support for custom HA URLs (useful for non-standard ports or IPs)
+
+### Improved
+- Better logging showing which API URL is being used
+- Automatic URL selection based on token type
+
 ## [1.0.6] - 2025-11-11
 
 ### Fixed
