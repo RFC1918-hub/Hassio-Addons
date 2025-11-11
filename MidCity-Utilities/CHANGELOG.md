@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2025-11-11
+
+### Added
+- Configurable log level (debug, info, warning, error)
+- Enhanced HTML parsing with 5 different strategies
+- Debug logging to save HTML to /tmp/meters_page.html
+- More robust meter number detection (8-12 digit patterns)
+- Flexible balance extraction (handles various currency formats)
+- Smart meter type detection (electricity, water, gas)
+
+### Improved
+- Better error messages showing what HTML structure was found
+- Parse meter data from tables, divs, cards, and custom elements
+- Log detailed parsing information for troubleshooting
+- Default log level set to DEBUG for initial setup
+
 ## [1.0.1] - 2025-11-11
 
 ### Fixed

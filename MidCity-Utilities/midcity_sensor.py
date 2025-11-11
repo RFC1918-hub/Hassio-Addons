@@ -10,8 +10,9 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 # Set up logging
+log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -69,30 +70,75 @@ class MidCityUtilitiesSensor:
                 logger.error(f"Failed to retrieve meter data. Status code: {response.status_code}")
                 return None
 
+            # Save HTML for debugging
+            try:
+                with open('/tmp/meters_page.html', 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                logger.info("Saved HTML to /tmp/meters_page.html for debugging")
+            except Exception as e:
+                logger.warning(f"Could not save HTML for debugging: {e}")
+
             # Parse the HTML content
             soup = BeautifulSoup(response.text, 'html.parser')
 
             meters = []
 
-            # Find all meter cards - adjust selectors based on actual HTML structure
-            meter_cards = soup.find_all('div', class_='meter-card') or soup.find_all('div', class_='card')
+            # Log some info about the page structure
+            logger.info(f"Page title: {soup.title.string if soup.title else 'No title'}")
+
+            # Try to find common container elements
+            logger.info("Searching for meter data in HTML...")
+
+            # Try multiple strategies to find meters
+            meter_cards = []
+
+            # Strategy 1: Look for cards with common class names
+            meter_cards = soup.find_all('div', class_='meter-card')
+            if meter_cards:
+                logger.info(f"Found {len(meter_cards)} elements with class 'meter-card'")
+
+            # Strategy 2: Look for any card class
+            if not meter_cards:
+                meter_cards = soup.find_all('div', class_='card')
+                if meter_cards:
+                    logger.info(f"Found {len(meter_cards)} elements with class 'card'")
+
+            # Strategy 3: Look for table rows
+            if not meter_cards:
+                meter_cards = soup.find_all('tr')
+                if meter_cards:
+                    logger.info(f"Found {len(meter_cards)} table rows")
+
+            # Strategy 4: Look for any div with data attributes
+            if not meter_cards:
+                meter_cards = soup.find_all('div', {'data-meter-id': True})
+                if meter_cards:
+                    logger.info(f"Found {len(meter_cards)} elements with data-meter-id")
+
+            # Strategy 5: Look for specific meter-related elements
+            if not meter_cards:
+                meter_cards = soup.select('[class*="meter"]')
+                if meter_cards:
+                    logger.info(f"Found {len(meter_cards)} elements with 'meter' in class name")
 
             if not meter_cards:
-                logger.warning("No meter cards found. Attempting alternative parsing...")
-                # Try alternative parsing methods
-                meter_cards = soup.find_all('div', {'data-meter-id': True}) or soup.select('.meter, .prepaid-meter')
+                logger.warning("No meter cards found with any strategy")
+                # Log the page structure for debugging
+                logger.debug(f"Page structure: {soup.prettify()[:1000]}")
+                return None
 
             for card in meter_cards:
                 try:
                     meter_data = self.parse_meter_card(card)
                     if meter_data:
                         meters.append(meter_data)
+                        logger.info(f"Successfully parsed meter: {meter_data}")
                 except Exception as e:
                     logger.error(f"Error parsing meter card: {e}")
                     continue
 
             logger.info(f"Retrieved data for {len(meters)} meter(s)")
-            return meters
+            return meters if meters else None
 
         except Exception as e:
             logger.error(f"Error retrieving meter data: {e}")
@@ -100,43 +146,104 @@ class MidCityUtilitiesSensor:
 
     def parse_meter_card(self, card):
         """Parse individual meter card to extract data."""
+        import re
         meter_data = {}
 
-        # Try to extract meter number
-        meter_number = (
-            card.get('data-meter-id') or
-            (card.find('span', class_='meter-number') and card.find('span', class_='meter-number').text.strip()) or
-            (card.find(string=lambda text: text and 'Meter' in text))
-        )
+        # Get all text from the card
+        card_text = card.get_text(separator=' ', strip=True)
+        logger.debug(f"Parsing card text: {card_text[:200]}")
 
-        # Try to extract balance/credit
+        # Try to extract meter number - look for patterns like digits
+        meter_number = None
+
+        # Strategy 1: Look for data attributes
+        meter_number = card.get('data-meter-id') or card.get('data-meter')
+
+        # Strategy 2: Look for specific elements
+        if not meter_number:
+            meter_elem = (
+                card.find('span', class_='meter-number') or
+                card.find('div', class_='meter-number') or
+                card.find(class_=re.compile(r'meter.*number', re.I))
+            )
+            if meter_elem:
+                meter_number = meter_elem.text.strip()
+
+        # Strategy 3: Look for patterns in text (meter numbers are typically 8-12 digits)
+        if not meter_number:
+            meter_match = re.search(r'\b(\d{8,12})\b', card_text)
+            if meter_match:
+                meter_number = meter_match.group(1)
+
+        # Strategy 4: Look for text containing "Meter" followed by a number
+        if not meter_number:
+            meter_match = re.search(r'Meter\s*:?\s*(\d+)', card_text, re.I)
+            if meter_match:
+                meter_number = meter_match.group(1)
+
+        # Try to extract balance/credit - look for R or currency patterns
+        balance = None
+
+        # Strategy 1: Look for elements with balance-related classes
         balance_elem = (
             card.find('span', class_='balance') or
+            card.find('div', class_='balance') or
+            card.find('span', class_='credit') or
             card.find('div', class_='credit') or
-            card.find(string=lambda text: text and 'R' in str(text))
+            card.find(class_=re.compile(r'balance|credit|amount', re.I))
         )
 
         if balance_elem:
-            balance_text = balance_elem.text.strip() if hasattr(balance_elem, 'text') else str(balance_elem).strip()
-            # Extract numeric value from balance text
-            import re
-            balance_match = re.search(r'R?\s*([\d,.]+)', balance_text)
-            if balance_match:
-                meter_data['balance'] = float(balance_match.group(1).replace(',', ''))
+            balance_text = balance_elem.text.strip()
+        else:
+            # Strategy 2: Search in all text for currency patterns
+            balance_text = card_text
+
+        # Extract numeric value (handles R123.45, R 123.45, 123.45, R1,234.56, etc.)
+        balance_match = re.search(r'R?\s*([\d,]+\.?\d*)', balance_text)
+        if balance_match:
+            balance_str = balance_match.group(1).replace(',', '')
+            try:
+                balance = float(balance_str)
+                meter_data['balance'] = balance
+            except ValueError:
+                logger.warning(f"Could not convert balance '{balance_str}' to float")
 
         # Try to extract meter type (electricity/water)
-        meter_type = (
-            card.get('data-meter-type') or
-            (card.find('span', class_='meter-type') and card.find('span', class_='meter-type').text.strip()) or
-            'unknown'
-        )
+        meter_type = 'unknown'
+
+        # Strategy 1: Look for data attributes
+        meter_type = card.get('data-meter-type') or card.get('data-type')
+
+        # Strategy 2: Look for specific elements
+        if not meter_type or meter_type == 'unknown':
+            type_elem = (
+                card.find('span', class_='meter-type') or
+                card.find('div', class_='meter-type') or
+                card.find(class_=re.compile(r'type', re.I))
+            )
+            if type_elem:
+                meter_type = type_elem.text.strip()
+
+        # Strategy 3: Look for keywords in text
+        if not meter_type or meter_type == 'unknown':
+            card_text_lower = card_text.lower()
+            if 'electricity' in card_text_lower or 'electric' in card_text_lower:
+                meter_type = 'electricity'
+            elif 'water' in card_text_lower:
+                meter_type = 'water'
+            elif 'gas' in card_text_lower:
+                meter_type = 'gas'
 
         if meter_number:
             meter_data['meter_number'] = str(meter_number).strip()
             meter_data['meter_type'] = str(meter_type).lower()
             meter_data['last_updated'] = datetime.now().isoformat()
+            logger.debug(f"Parsed meter data: {meter_data}")
+        else:
+            logger.debug("Could not find meter number in card")
 
-        return meter_data if meter_data else None
+        return meter_data if meter_data.get('meter_number') else None
 
     def update_ha_sensor(self, meter_data):
         """Update Home Assistant sensor using the REST API."""
@@ -227,6 +334,11 @@ def main():
     username = config.get('username')
     password = config.get('password')
     scan_interval = config.get('scan_interval', 300)
+    log_level = config.get('log_level', 'info').upper()
+
+    # Update log level if specified in config
+    logger.setLevel(getattr(logging, log_level, logging.INFO))
+    logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
 
     if not username or not password:
         logger.error("Username and password are required in configuration")
