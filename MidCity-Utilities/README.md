@@ -78,6 +78,24 @@ To allow the add-on to create sensors in Home Assistant:
    - `sensor.midcity_electricity_<meter_number>`
    - `sensor.midcity_water_<meter_number>`
 
+### Organizing Your Sensors
+
+To remove sensors from "Ungrouped" and organize them:
+
+**Option 1: Assign to an Area**
+1. Go to Settings → Devices & Services → Entities
+2. Find your MidCity sensors
+3. Click on each sensor
+4. Click "Settings" (gear icon)
+5. Select an Area (e.g., "Utility Room" or create "MidCity Utilities")
+
+**Option 2: Create a Helper Group**
+1. Go to Settings → Devices & Services → Helpers
+2. Click "Create Helper" → "Group"
+3. Name it "MidCity Utilities"
+4. Add your MidCity sensors to the group
+5. The group will appear as a single entity with all sensors inside
+
 ## Sensor Entities
 
 The add-on creates sensor entities with the following attributes:

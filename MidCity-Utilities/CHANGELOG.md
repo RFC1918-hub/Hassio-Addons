@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2025-11-11
+
+### Changed
+- Simplified sensor friendly_name to "MidCity Electricity" (without meter number)
+- Added attribution: "Data from MidCity Utilities" to sensor attributes
+- Cleaner sensor display in Home Assistant UI
+
+### Documentation
+- Added instructions for organizing sensors (no longer ungrouped)
+- Option 1: Assign sensors to an Area in Home Assistant
+- Option 2: Create a Helper Group to group all MidCity sensors
+- Step-by-step guide for both methods
+
 ## [1.0.8] - 2025-11-11
 
 ### Added

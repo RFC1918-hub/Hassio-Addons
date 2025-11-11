@@ -549,9 +549,10 @@ class MidCityUtilitiesSensor:
                     'meter_type': meter_type,
                     'unit_of_measurement': unit_of_measurement,
                     'device_class': device_class,
-                    'friendly_name': f'MidCity {meter_type.title()} {meter_number}',
+                    'friendly_name': f'MidCity {meter_type.title()}',
                     'last_updated': meter.get('last_updated'),
-                    'icon': icon
+                    'icon': icon,
+                    'attribution': 'Data from MidCity Utilities'
                 }
 
                 # Add predicted zero date if available
