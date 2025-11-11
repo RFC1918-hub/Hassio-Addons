@@ -7,6 +7,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Install requirements for add-on
 RUN \
   apk add --no-cache \
+    bash \
     python3 \
     py3-pip
 
@@ -21,5 +22,7 @@ COPY run.sh /
 COPY midcity_sensor.py /
 
 RUN chmod a+x /run.sh
+
+WORKDIR /
 
 CMD [ "/run.sh" ]
