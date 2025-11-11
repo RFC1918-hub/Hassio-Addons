@@ -4,8 +4,8 @@ FROM $BUILD_FROM
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install jq for parsing config
-RUN apk add --no-cache jq
+# Install jq and gosu for parsing config and running as user
+RUN apk add --no-cache jq gosu
 
 # Copy the run script
 COPY run.sh /

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4
+
+- Fixed: Install gosu package to support official entrypoint
+
 ## 1.0.3
 
 - Fixed: Use COPY --from to extract official Profilarr Docker image
