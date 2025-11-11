@@ -546,6 +546,72 @@ class MidCityUtilitiesSensor:
             logger.debug(f"Could not access device registry: {e}")
             return None
 
+    def register_entity_in_registry(self, entity_id, unique_id, device_id, friendly_name, device_class, icon, unit_of_measurement):
+        """Register entity in entity registry with unique_id before creating state."""
+        try:
+            # Check if entity already exists in registry
+            response = requests.get(
+                f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/get',
+                headers=self.headers,
+                params={'entity_id': entity_id},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                # Entity already exists in registry
+                logger.debug(f"Entity {entity_id} already registered in entity registry")
+
+                # Update device association if needed
+                if device_id:
+                    update_response = requests.post(
+                        f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/update',
+                        headers=self.headers,
+                        json={
+                            'entity_id': entity_id,
+                            'device_id': device_id
+                        },
+                        timeout=10
+                    )
+                    if update_response.status_code == 200:
+                        logger.debug(f"Updated device association for {entity_id}")
+
+                return True
+            else:
+                # Entity doesn't exist, create it in registry with unique_id
+                logger.info(f"Registering new entity {entity_id} in entity registry with unique_id...")
+
+                create_data = {
+                    'entity_id': entity_id,
+                    'unique_id': unique_id,
+                    'platform': 'midcity_utilities',
+                    'name': friendly_name,
+                    'icon': icon
+                }
+
+                # Add device_id if available
+                if device_id:
+                    create_data['device_id'] = device_id
+
+                create_response = requests.post(
+                    f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/create',
+                    headers=self.headers,
+                    json=create_data,
+                    timeout=10
+                )
+
+                if create_response.status_code in [200, 201]:
+                    logger.info(f"Successfully registered {entity_id} in entity registry with unique_id: {unique_id}")
+                    return True
+                else:
+                    logger.warning(f"Could not register entity in registry: {create_response.status_code} - {create_response.text}")
+                    # Continue anyway - state creation might still work
+                    return False
+
+        except Exception as e:
+            logger.warning(f"Could not register entity in registry: {e}")
+            # Continue anyway - state creation might still work
+            return False
+
     def register_entity_with_device(self, entity_id, device_id):
         """Register entity in entity registry with device association."""
         if not device_id:
@@ -608,8 +674,10 @@ class MidCityUtilitiesSensor:
                 meter_type = meter.get('meter_type', 'unknown')
                 unit = meter.get('unit', 'kWh')
 
-                # Create unique entity_id
+                # Create unique entity_id and unique_id
                 entity_id = f"sensor.midcity_{meter_type}_{meter_number.replace(' ', '_').lower()}"
+                # unique_id should be stable and unique (without the sensor. prefix)
+                unique_id = f"midcity_{meter_type}_{meter_number}"
 
                 # Determine device class and icon based on meter type
                 if meter_type == 'electricity':
@@ -625,13 +693,28 @@ class MidCityUtilitiesSensor:
                     icon = 'mdi:cash'
                     unit_of_measurement = 'ZAR' if unit == 'ZAR' else unit
 
+                # Friendly name for the entity
+                friendly_name = f'MidCity {meter_type.title()}'
+
+                # Register entity in entity registry BEFORE creating state
+                # This ensures the entity has a unique_id for UI management
+                self.register_entity_in_registry(
+                    entity_id=entity_id,
+                    unique_id=unique_id,
+                    device_id=device_id,
+                    friendly_name=friendly_name,
+                    device_class=device_class,
+                    icon=icon,
+                    unit_of_measurement=unit_of_measurement
+                )
+
                 # Prepare state data
                 attributes = {
                     'meter_number': meter_number,
                     'meter_type': meter_type,
                     'unit_of_measurement': unit_of_measurement,
                     'device_class': device_class,
-                    'friendly_name': f'MidCity {meter_type.title()}',
+                    'friendly_name': friendly_name,
                     'last_updated': meter.get('last_updated'),
                     'icon': icon,
                     'attribution': 'Data from MidCity Utilities'
@@ -661,10 +744,6 @@ class MidCityUtilitiesSensor:
 
                 if response.status_code in [200, 201]:
                     logger.info(f"Successfully updated sensor: {entity_id} = {balance} {unit_of_measurement}")
-
-                    # Associate entity with device if we found one
-                    if device_id:
-                        self.register_entity_with_device(entity_id, device_id)
                 else:
                     logger.error(f"Failed to update sensor {entity_id}: {response.status_code} - {response.text}")
                     logger.debug(f"Request headers: {self.headers}")

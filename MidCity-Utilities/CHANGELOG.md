@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2025-11-11
+
+### Fixed
+- Entities now properly registered with unique_id for UI management
+- Entity settings can now be managed from the Home Assistant UI
+- Entity registry registration happens before state creation
+- Automatic device association during entity registration
+
+### Changed
+- Entities are registered in entity registry with unique_id before state updates
+- Simplified device association logic (now handled during entity creation)
+- Better logging for entity registration process
+
 ## [1.1.0] - 2025-11-11
 
 ### Added
