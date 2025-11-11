@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2025-11-11
+
+### Fixed
+- MQTT connection authentication issues resolved
+- Add Supervisor services API to get MQTT configuration automatically
+- Improved MQTT error messages with specific authentication guidance
+- Add "mqtt:need" service dependency in config.json
+
+### Added
+- Automatic MQTT configuration retrieval from Supervisor
+- Better logging for MQTT connection status and errors
+- Support for both authenticated and anonymous MQTT connections
+
 ## [1.2.0] - 2025-11-11
 
 ### Changed

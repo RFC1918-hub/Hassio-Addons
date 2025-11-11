@@ -18,11 +18,53 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# MQTT configuration for Home Assistant
-MQTT_HOST = "core-mosquitto"  # Home Assistant's internal MQTT broker
-MQTT_PORT = 1883
-MQTT_USER = os.environ.get('MQTT_USER', '')
-MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD', '')
+# Get MQTT configuration from Supervisor services
+def get_mqtt_config():
+    """Get MQTT configuration from Supervisor services API."""
+    try:
+        supervisor_token = os.environ.get('SUPERVISOR_TOKEN')
+        if not supervisor_token:
+            logger.warning("No SUPERVISOR_TOKEN found, using default MQTT config")
+            return {
+                'host': 'localhost',
+                'port': 1883,
+                'user': None,
+                'password': None
+            }
+
+        headers = {
+            'Authorization': f'Bearer {supervisor_token}',
+            'Content-Type': 'application/json'
+        }
+
+        response = requests.get('http://supervisor/services/mqtt', headers=headers, timeout=10)
+        if response.status_code == 200:
+            mqtt_config = response.json()['data']
+            logger.info(f"Retrieved MQTT config from Supervisor: {mqtt_config.get('host')}:{mqtt_config.get('port')}")
+            return mqtt_config
+        else:
+            logger.warning(f"Could not get MQTT config from Supervisor: {response.status_code}")
+            return {
+                'host': 'localhost',
+                'port': 1883,
+                'user': None,
+                'password': None
+            }
+    except Exception as e:
+        logger.warning(f"Error getting MQTT config: {e}")
+        return {
+            'host': 'localhost',
+            'port': 1883,
+            'user': None,
+            'password': None
+        }
+
+# Get MQTT configuration
+MQTT_CONFIG = get_mqtt_config()
+MQTT_HOST = MQTT_CONFIG.get('host', 'localhost')
+MQTT_PORT = MQTT_CONFIG.get('port', 1883)
+MQTT_USER = MQTT_CONFIG.get('username') or MQTT_CONFIG.get('user')
+MQTT_PASSWORD = MQTT_CONFIG.get('password')
 
 # MidCity Utilities URLs
 LOGIN_URL = "https://buyprepaid.midcityutilities.co.za/ajax/login"
@@ -44,7 +86,10 @@ class MidCityUtilitiesSensor:
 
         # Set MQTT credentials if available
         if MQTT_USER and MQTT_PASSWORD:
+            logger.info(f"Using MQTT authentication with user: {MQTT_USER}")
             self.mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+        else:
+            logger.info("Using MQTT without authentication (anonymous)")
 
         # Set MQTT callbacks
         self.mqtt_client.on_connect = self.on_mqtt_connect
@@ -59,6 +104,7 @@ class MidCityUtilitiesSensor:
             self.mqtt_client.loop_start()
         except Exception as e:
             logger.error(f"Failed to connect to MQTT broker: {e}")
+            logger.error(f"Make sure Mosquitto broker add-on is installed and running")
 
     def on_mqtt_connect(self, client, userdata, flags, rc):
         """MQTT connection callback."""
@@ -66,7 +112,18 @@ class MidCityUtilitiesSensor:
             logger.info("Successfully connected to MQTT broker")
             self.mqtt_connected = True
         else:
-            logger.error(f"Failed to connect to MQTT broker with code: {rc}")
+            error_messages = {
+                1: "Connection refused - incorrect protocol version",
+                2: "Connection refused - invalid client identifier",
+                3: "Connection refused - server unavailable",
+                4: "Connection refused - bad username or password",
+                5: "Connection refused - not authorized"
+            }
+            error_msg = error_messages.get(rc, f"Unknown error code: {rc}")
+            logger.error(f"Failed to connect to MQTT broker: {error_msg} (code: {rc})")
+            if rc == 5:
+                logger.error("MQTT authentication failed. Check Mosquitto broker configuration.")
+                logger.error("You may need to configure Mosquitto to allow anonymous connections or add user credentials.")
             self.mqtt_connected = False
 
     def on_mqtt_disconnect(self, client, userdata, rc):
@@ -575,7 +632,7 @@ class MidCityUtilitiesSensor:
                         "name": "MidCity Utilities Sensor",
                         "model": "MidCity Utilities Monitor",
                         "manufacturer": "MidCity Utilities",
-                        "sw_version": "1.2.0"
+                        "sw_version": "1.2.1"
                     }
                 }
 
