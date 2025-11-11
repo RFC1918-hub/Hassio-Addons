@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.7
+
+- Debug: Add directory listing to find correct entry point
+
 ## 1.0.6
 
 - Fixed: Start Profilarr directly using node instead of entrypoint script
