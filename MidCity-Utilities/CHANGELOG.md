@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.10] - 2025-11-11
+
+### Fixed
+- Improved predicted zero date parsing to search entire page text
+- Use regex on full page text instead of searching for specific elements
+- Added debug logging when predicted date is not found
+- Now correctly extracts dates in format YYYY-MM-DD or DD/MM/YYYY
+
 ## [1.0.9] - 2025-11-11
 
 ### Changed

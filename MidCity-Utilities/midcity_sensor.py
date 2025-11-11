@@ -186,21 +186,22 @@ class MidCityUtilitiesSensor:
 
             # Find predicted zero balance date
             predicted_zero_date = None
-            predicted_date_elem = soup.find(string=re.compile(r'Predicted 0 balance date', re.I))
-            if predicted_date_elem:
-                # Look for date pattern in the element or nearby
-                parent_text = predicted_date_elem.parent.get_text(strip=True) if predicted_date_elem.parent else predicted_date_elem
-                # Pattern: YYYY-MM-DD or DD/MM/YYYY
-                date_match = re.search(r'(\d{4}-\d{2}-\d{2})', str(parent_text))
+
+            # Strategy 1: Search in all text for the predicted date
+            page_text = soup.get_text()
+            # Look for "Predicted 0 balance date: 2025-12-13" pattern
+            date_match = re.search(r'Predicted\s+0\s+balance\s+date[:\s]+(\d{4}-\d{2}-\d{2})', page_text, re.I)
+            if date_match:
+                predicted_zero_date = date_match.group(1)
+                logger.info(f"Found predicted zero date: {predicted_zero_date}")
+            else:
+                # Try alternative format with slashes
+                date_match = re.search(r'Predicted\s+0\s+balance\s+date[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})', page_text, re.I)
                 if date_match:
                     predicted_zero_date = date_match.group(1)
                     logger.info(f"Found predicted zero date: {predicted_zero_date}")
                 else:
-                    # Try alternative date format
-                    date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', str(parent_text))
-                    if date_match:
-                        predicted_zero_date = date_match.group(1)
-                        logger.info(f"Found predicted zero date: {predicted_zero_date}")
+                    logger.debug("Predicted zero date not found in page text")
 
             # Create meter data if we found both
             meters = []

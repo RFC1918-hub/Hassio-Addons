@@ -1,6 +1,6 @@
 {
   "name": "MidCity Utilities Sensor",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "slug": "midcity_utilities",
   "description": "Monitor your MidCity Utilities prepaid meters in Home Assistant",
   "url": "https://github.com/Hassio-Addons/MidCity-Utilities",
