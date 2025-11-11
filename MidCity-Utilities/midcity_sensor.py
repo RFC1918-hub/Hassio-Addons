@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 SUPERVISOR_TOKEN = os.environ.get('SUPERVISOR_TOKEN')
 HA_URL = 'http://supervisor/core/api'
 
+# Check if supervisor token is available
+if SUPERVISOR_TOKEN:
+    logger.info("SUPERVISOR_TOKEN found")
+else:
+    logger.warning("SUPERVISOR_TOKEN not found - API calls may fail")
+
 # MidCity Utilities URLs
 LOGIN_URL = "https://buyprepaid.midcityutilities.co.za/ajax/login"
 METER_URL = "https://buyprepaid.midcityutilities.co.za/meters"
@@ -247,42 +253,79 @@ class MidCityUtilitiesSensor:
             if meter_match:
                 meter_number = meter_match.group(1)
 
-        # Try to extract balance/credit - look for R or currency patterns
+        # Try to extract balance/credit - look for specific patterns with units
         balance = None
+        unit = None
 
-        # Strategy 1: Look for elements with balance-related classes
-        balance_elem = (
-            card.find('span', class_='balance') or
-            card.find('div', class_='balance') or
-            card.find('span', class_='credit') or
-            card.find('div', class_='credit') or
-            card.find(class_=re.compile(r'balance|credit|amount', re.I))
-        )
-
-        if balance_elem:
-            balance_text = balance_elem.text.strip()
-        else:
-            # Strategy 2: Search in all text for currency patterns
-            balance_text = card_text
-
-        # Extract numeric value (handles R123.45, R 123.45, 123.45, R1,234.56, etc.)
-        balance_match = re.search(r'R?\s*([\d,]+\.?\d*)', balance_text)
+        # Strategy 1: Look for balance with kWh (electricity)
+        balance_match = re.search(r'balance[:\s]+([\d,]+\.?\d*)\s*kWh', card_text, re.I)
         if balance_match:
             balance_str = balance_match.group(1).replace(',', '')
+            unit = 'kWh'
             try:
                 balance = float(balance_str)
                 meter_data['balance'] = balance
+                logger.debug(f"Found kWh balance: {balance}")
             except ValueError:
-                logger.warning(f"Could not convert balance '{balance_str}' to float")
+                pass
+
+        # Strategy 2: Look for balance with L or m³ (water)
+        if not balance:
+            balance_match = re.search(r'balance[:\s]+([\d,]+\.?\d*)\s*([Ll]|m³|m3)', card_text, re.I)
+            if balance_match:
+                balance_str = balance_match.group(1).replace(',', '')
+                unit = 'm³' if 'm' in balance_match.group(2).lower() else 'L'
+                try:
+                    balance = float(balance_str)
+                    meter_data['balance'] = balance
+                    logger.debug(f"Found water balance: {balance} {unit}")
+                except ValueError:
+                    pass
+
+        # Strategy 3: Look for balance with R (South African Rand)
+        if not balance:
+            balance_match = re.search(r'R\s*([\d,]+\.?\d*)', card_text)
+            if balance_match:
+                balance_str = balance_match.group(1).replace(',', '')
+                # Make sure it's not the meter number (meter numbers don't have decimals typically)
+                if '.' in balance_str or float(balance_str) < 100000:
+                    unit = 'ZAR'
+                    try:
+                        balance = float(balance_str)
+                        meter_data['balance'] = balance
+                        logger.debug(f"Found ZAR balance: {balance}")
+                    except ValueError:
+                        pass
+
+        # Strategy 4: Look for any decimal number with "balance" nearby (not meter ID)
+        if not balance:
+            balance_match = re.search(r'balance[:\s]+([\d,]+\.\d+)', card_text, re.I)
+            if balance_match:
+                balance_str = balance_match.group(1).replace(',', '')
+                try:
+                    balance = float(balance_str)
+                    meter_data['balance'] = balance
+                    logger.debug(f"Found generic balance: {balance}")
+                except ValueError:
+                    pass
 
         # Try to extract meter type (electricity/water)
         meter_type = 'unknown'
 
-        # Strategy 1: Look for data attributes
-        meter_type = card.get('data-meter-type') or card.get('data-type')
+        # Strategy 1: Determine from unit
+        if unit == 'kWh':
+            meter_type = 'electricity'
+        elif unit in ['L', 'm³']:
+            meter_type = 'water'
+        elif unit == 'ZAR':
+            meter_type = 'prepaid'
 
-        # Strategy 2: Look for specific elements
-        if not meter_type or meter_type == 'unknown':
+        # Strategy 2: Look for data attributes
+        if meter_type == 'unknown':
+            meter_type = card.get('data-meter-type') or card.get('data-type') or 'unknown'
+
+        # Strategy 3: Look for specific elements
+        if meter_type == 'unknown':
             type_elem = (
                 card.find('span', class_='meter-type') or
                 card.find('div', class_='meter-type') or
@@ -291,8 +334,8 @@ class MidCityUtilitiesSensor:
             if type_elem:
                 meter_type = type_elem.text.strip()
 
-        # Strategy 3: Look for keywords in text
-        if not meter_type or meter_type == 'unknown':
+        # Strategy 4: Look for keywords in text
+        if meter_type == 'unknown':
             card_text_lower = card_text.lower()
             if 'electricity' in card_text_lower or 'electric' in card_text_lower:
                 meter_type = 'electricity'
@@ -304,23 +347,46 @@ class MidCityUtilitiesSensor:
         if meter_number:
             meter_data['meter_number'] = str(meter_number).strip()
             meter_data['meter_type'] = str(meter_type).lower()
+            meter_data['unit'] = unit if unit else 'kWh'  # Default to kWh
             meter_data['last_updated'] = datetime.now().isoformat()
             logger.debug(f"Parsed meter data: {meter_data}")
         else:
             logger.debug("Could not find meter number in card")
 
-        return meter_data if meter_data.get('meter_number') else None
+        return meter_data if meter_data.get('meter_number') and meter_data.get('balance') is not None else None
 
     def update_ha_sensor(self, meter_data):
         """Update Home Assistant sensor using the REST API."""
         try:
+            if not SUPERVISOR_TOKEN:
+                logger.error("Cannot update sensors - SUPERVISOR_TOKEN not available")
+                logger.info("Sensor data that would be created:")
+                for meter in meter_data:
+                    logger.info(f"  - Meter {meter.get('meter_number')}: {meter.get('balance')} {meter.get('unit')}")
+                return
+
             for meter in meter_data:
                 meter_number = meter.get('meter_number', 'unknown')
                 balance = meter.get('balance', 0)
                 meter_type = meter.get('meter_type', 'unknown')
+                unit = meter.get('unit', 'kWh')
 
                 # Create unique entity_id
                 entity_id = f"sensor.midcity_{meter_type}_{meter_number.replace(' ', '_').lower()}"
+
+                # Determine device class and icon based on meter type
+                if meter_type == 'electricity':
+                    device_class = 'energy'
+                    icon = 'mdi:lightning-bolt'
+                    unit_of_measurement = unit
+                elif meter_type == 'water':
+                    device_class = 'water'
+                    icon = 'mdi:water'
+                    unit_of_measurement = unit
+                else:
+                    device_class = 'monetary'
+                    icon = 'mdi:cash'
+                    unit_of_measurement = 'ZAR' if unit == 'ZAR' else unit
 
                 # Prepare state data
                 state_data = {
@@ -328,13 +394,17 @@ class MidCityUtilitiesSensor:
                     'attributes': {
                         'meter_number': meter_number,
                         'meter_type': meter_type,
-                        'unit_of_measurement': 'ZAR',
-                        'device_class': 'monetary',
+                        'unit_of_measurement': unit_of_measurement,
+                        'device_class': device_class,
                         'friendly_name': f'MidCity {meter_type.title()} {meter_number}',
                         'last_updated': meter.get('last_updated'),
-                        'icon': 'mdi:cash' if meter_type == 'electricity' else 'mdi:water'
+                        'icon': icon
                     }
                 }
+
+                logger.debug(f"Attempting to create/update sensor: {entity_id}")
+                logger.debug(f"API URL: {HA_URL}/states/{entity_id}")
+                logger.debug(f"State data: {state_data}")
 
                 # Update state via Home Assistant API
                 response = requests.post(
@@ -345,12 +415,14 @@ class MidCityUtilitiesSensor:
                 )
 
                 if response.status_code in [200, 201]:
-                    logger.info(f"Successfully updated sensor: {entity_id}")
+                    logger.info(f"Successfully updated sensor: {entity_id} = {balance} {unit_of_measurement}")
                 else:
                     logger.error(f"Failed to update sensor {entity_id}: {response.status_code} - {response.text}")
+                    logger.debug(f"Request headers: {self.headers}")
+                    logger.debug(f"SUPERVISOR_TOKEN available: {bool(SUPERVISOR_TOKEN)}")
 
         except Exception as e:
-            logger.error(f"Error updating Home Assistant sensor: {e}")
+            logger.error(f"Error updating Home Assistant sensor: {e}", exc_info=True)
 
     def run(self):
         """Main run loop."""

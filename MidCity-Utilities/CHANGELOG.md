@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2025-11-11
+
+### Fixed
+- Balance parsing now correctly extracts kWh values instead of meter numbers
+- Look for balance with units (kWh, L, m³, ZAR) to avoid matching meter IDs
+- Meter type now correctly detected from unit (kWh = electricity)
+- Changed hassio_role from "default" to "homeassistant" for proper API access
+- Only return meter data if both meter number AND balance are found
+
+### Improved
+- Enhanced balance detection with 4 strategies (kWh, water units, ZAR, generic)
+- Better error messages for 401 Unauthorized errors
+- Added SUPERVISOR_TOKEN availability check
+- Detailed debug logging for API calls and authentication
+- Device class and icon now match meter type (energy, water, monetary)
+- Unit of measurement correctly set based on meter type
+
 ## [1.0.3] - 2025-11-11
 
 ### Fixed
