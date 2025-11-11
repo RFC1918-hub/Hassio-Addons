@@ -510,6 +510,84 @@ class MidCityUtilitiesSensor:
 
         return meter_data if meter_data.get('meter_number') and meter_data.get('balance') is not None else None
 
+    def get_or_create_device(self):
+        """Get or create MidCity Utilities device."""
+        try:
+            # Try to get device registry
+            response = requests.get(
+                f'{self.ha_url.replace("/api", "")}/api/config/device_registry/list',
+                headers=self.headers,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                devices = response.json()
+                # Look for our device by identifiers
+                midcity_device = next(
+                    (dev for dev in devices
+                     if any('midcity_utilities' in str(identifier).lower()
+                           for identifier in dev.get('identifiers', []))),
+                    None
+                )
+
+                if midcity_device:
+                    device_id = midcity_device.get('id')
+                    logger.debug(f"Found existing MidCity device with ID: {device_id}")
+                    return device_id
+                else:
+                    # Device doesn't exist, we'll return None and let entity be created without device
+                    logger.debug("MidCity device not found, sensor will be created without device association")
+                    return None
+            else:
+                logger.debug(f"Could not access device registry: {response.status_code}")
+                return None
+
+        except Exception as e:
+            logger.debug(f"Could not access device registry: {e}")
+            return None
+
+    def register_entity_with_device(self, entity_id, device_id):
+        """Register entity in entity registry with device association."""
+        if not device_id:
+            return False
+
+        try:
+            # Get entity registry entry
+            response = requests.get(
+                f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/get',
+                headers=self.headers,
+                params={'entity_id': entity_id},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                # Entity exists in registry, update it
+                logger.info(f"Updating entity {entity_id} to associate with device...")
+                update_response = requests.post(
+                    f'{self.ha_url.replace("/api", "")}/api/config/entity_registry/update',
+                    headers=self.headers,
+                    json={
+                        'entity_id': entity_id,
+                        'device_id': device_id
+                    },
+                    timeout=10
+                )
+
+                if update_response.status_code == 200:
+                    logger.info(f"Successfully associated {entity_id} with MidCity device")
+                    return True
+                else:
+                    logger.debug(f"Could not update entity: {update_response.status_code} - {update_response.text}")
+                    return False
+            else:
+                # Entity not in registry yet, it will be registered on first state update
+                logger.debug("Entity not yet in registry, will be registered on next update")
+                return False
+
+        except Exception as e:
+            logger.debug(f"Could not register entity with device: {e}")
+            return False
+
     def update_ha_sensor(self, meter_data):
         """Update Home Assistant sensor using the REST API."""
         try:
@@ -520,6 +598,9 @@ class MidCityUtilitiesSensor:
                 for meter in meter_data:
                     logger.info(f"  - Meter {meter.get('meter_number')}: {meter.get('balance')} {meter.get('unit')}")
                 return
+
+            # Get or create device
+            device_id = self.get_or_create_device()
 
             for meter in meter_data:
                 meter_number = meter.get('meter_number', 'unknown')
@@ -580,6 +661,10 @@ class MidCityUtilitiesSensor:
 
                 if response.status_code in [200, 201]:
                     logger.info(f"Successfully updated sensor: {entity_id} = {balance} {unit_of_measurement}")
+
+                    # Associate entity with device if we found one
+                    if device_id:
+                        self.register_entity_with_device(entity_id, device_id)
                 else:
                     logger.error(f"Failed to update sensor {entity_id}: {response.status_code} - {response.text}")
                     logger.debug(f"Request headers: {self.headers}")

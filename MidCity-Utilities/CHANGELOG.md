@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-11-11
+
+### Added
+- Automatic device association for sensors
+- Sensors now automatically grouped under "MidCity Utilities Sensor" device
+- No manual assignment needed - sensors appear alongside Update entity
+- Device registry integration for proper organization
+
+### Changed
+- Sensors no longer appear as "Ungrouped"
+- Automatically associate with add-on's device on creation
+- Cleaner UI organization without manual steps
+
 ## [1.0.10] - 2025-11-11
 
 ### Fixed
