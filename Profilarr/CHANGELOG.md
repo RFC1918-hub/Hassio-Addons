@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+- Changed: Use official Docker image directly (santiagosayshey/profilarr:latest)
+- Simplified: No custom build, just use pre-built image
+- Limited architectures to amd64 and aarch64 (supported by official image)
+
 ## 1.0.7
 
 - Debug: Add directory listing to find correct entry point
