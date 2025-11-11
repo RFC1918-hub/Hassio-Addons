@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.8] - 2025-11-11
+
+### Added
+- Extract "Predicted 0 balance date" from MidCity Utilities page
+- Add predicted_zero_date as sensor attribute
+- Shows when your balance is expected to reach zero
+- Supports YYYY-MM-DD and DD/MM/YYYY date formats
+
+### Improved
+- Better logging for predicted date extraction
+- Sensor attributes now include predicted_zero_date when available
+
 ## [1.0.7] - 2025-11-11
 
 ### Fixed

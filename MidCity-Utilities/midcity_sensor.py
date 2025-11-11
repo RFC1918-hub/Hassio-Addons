@@ -184,6 +184,24 @@ class MidCityUtilitiesSensor:
                         unit = 'kWh'
                         logger.info(f"Found balance in HTML: {balance} {unit}")
 
+            # Find predicted zero balance date
+            predicted_zero_date = None
+            predicted_date_elem = soup.find(string=re.compile(r'Predicted 0 balance date', re.I))
+            if predicted_date_elem:
+                # Look for date pattern in the element or nearby
+                parent_text = predicted_date_elem.parent.get_text(strip=True) if predicted_date_elem.parent else predicted_date_elem
+                # Pattern: YYYY-MM-DD or DD/MM/YYYY
+                date_match = re.search(r'(\d{4}-\d{2}-\d{2})', str(parent_text))
+                if date_match:
+                    predicted_zero_date = date_match.group(1)
+                    logger.info(f"Found predicted zero date: {predicted_zero_date}")
+                else:
+                    # Try alternative date format
+                    date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', str(parent_text))
+                    if date_match:
+                        predicted_zero_date = date_match.group(1)
+                        logger.info(f"Found predicted zero date: {predicted_zero_date}")
+
             # Create meter data if we found both
             meters = []
             if meter_number and balance is not None:
@@ -194,6 +212,11 @@ class MidCityUtilitiesSensor:
                     'unit': unit,
                     'last_updated': datetime.now().isoformat()
                 }
+
+                # Add predicted zero date if found
+                if predicted_zero_date:
+                    meter_data['predicted_zero_date'] = predicted_zero_date
+
                 meters.append(meter_data)
                 logger.info(f"Successfully combined meter data: {meter_data}")
             else:
@@ -521,17 +544,24 @@ class MidCityUtilitiesSensor:
                     unit_of_measurement = 'ZAR' if unit == 'ZAR' else unit
 
                 # Prepare state data
+                attributes = {
+                    'meter_number': meter_number,
+                    'meter_type': meter_type,
+                    'unit_of_measurement': unit_of_measurement,
+                    'device_class': device_class,
+                    'friendly_name': f'MidCity {meter_type.title()} {meter_number}',
+                    'last_updated': meter.get('last_updated'),
+                    'icon': icon
+                }
+
+                # Add predicted zero date if available
+                if meter.get('predicted_zero_date'):
+                    attributes['predicted_zero_date'] = meter.get('predicted_zero_date')
+                    logger.debug(f"Adding predicted zero date to sensor: {meter.get('predicted_zero_date')}")
+
                 state_data = {
                     'state': balance,
-                    'attributes': {
-                        'meter_number': meter_number,
-                        'meter_type': meter_type,
-                        'unit_of_measurement': unit_of_measurement,
-                        'device_class': device_class,
-                        'friendly_name': f'MidCity {meter_type.title()} {meter_number}',
-                        'last_updated': meter.get('last_updated'),
-                        'icon': icon
-                    }
+                    'attributes': attributes
                 }
 
                 logger.debug(f"Attempting to create/update sensor: {entity_id}")
