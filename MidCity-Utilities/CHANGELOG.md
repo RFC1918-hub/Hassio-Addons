@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] - 2025-11-11
+
+### Fixed
+- Move MQTT config retrieval to __init__ for better logging visibility
+- Improved MQTT configuration debugging output
+- Show MQTT host, port, and user in logs for troubleshooting
+
+### Changed
+- MQTT config now retrieved after logging is initialized
+- Better error messages showing actual MQTT configuration being used
+
 ## [1.2.1] - 2025-11-11
 
 ### Fixed

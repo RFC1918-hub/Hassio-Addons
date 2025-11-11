@@ -18,53 +18,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Get MQTT configuration from Supervisor services
-def get_mqtt_config():
-    """Get MQTT configuration from Supervisor services API."""
-    try:
-        supervisor_token = os.environ.get('SUPERVISOR_TOKEN')
-        if not supervisor_token:
-            logger.warning("No SUPERVISOR_TOKEN found, using default MQTT config")
-            return {
-                'host': 'localhost',
-                'port': 1883,
-                'user': None,
-                'password': None
-            }
-
-        headers = {
-            'Authorization': f'Bearer {supervisor_token}',
-            'Content-Type': 'application/json'
-        }
-
-        response = requests.get('http://supervisor/services/mqtt', headers=headers, timeout=10)
-        if response.status_code == 200:
-            mqtt_config = response.json()['data']
-            logger.info(f"Retrieved MQTT config from Supervisor: {mqtt_config.get('host')}:{mqtt_config.get('port')}")
-            return mqtt_config
-        else:
-            logger.warning(f"Could not get MQTT config from Supervisor: {response.status_code}")
-            return {
-                'host': 'localhost',
-                'port': 1883,
-                'user': None,
-                'password': None
-            }
-    except Exception as e:
-        logger.warning(f"Error getting MQTT config: {e}")
-        return {
-            'host': 'localhost',
-            'port': 1883,
-            'user': None,
-            'password': None
-        }
-
-# Get MQTT configuration
-MQTT_CONFIG = get_mqtt_config()
-MQTT_HOST = MQTT_CONFIG.get('host', 'localhost')
-MQTT_PORT = MQTT_CONFIG.get('port', 1883)
-MQTT_USER = MQTT_CONFIG.get('username') or MQTT_CONFIG.get('user')
-MQTT_PASSWORD = MQTT_CONFIG.get('password')
+# MQTT configuration - will be retrieved in __init__
+MQTT_CONFIG = None
+MQTT_HOST = None
+MQTT_PORT = None
+MQTT_USER = None
+MQTT_PASSWORD = None
 
 # MidCity Utilities URLs
 LOGIN_URL = "https://buyprepaid.midcityutilities.co.za/ajax/login"
@@ -81,13 +40,22 @@ class MidCityUtilitiesSensor:
         self.scan_interval = scan_interval
         self.session = requests.Session()
 
+        # Get MQTT configuration from Supervisor
+        mqtt_config = self.get_mqtt_config()
+        self.mqtt_host = mqtt_config.get('host', 'core-mosquitto')
+        self.mqtt_port = mqtt_config.get('port', 1883)
+        self.mqtt_user = mqtt_config.get('username') or mqtt_config.get('user')
+        self.mqtt_password = mqtt_config.get('password')
+
+        logger.info(f"MQTT Config - Host: {self.mqtt_host}, Port: {self.mqtt_port}, User: {self.mqtt_user}")
+
         # Initialize MQTT client
         self.mqtt_client = mqtt.Client()
 
         # Set MQTT credentials if available
-        if MQTT_USER and MQTT_PASSWORD:
-            logger.info(f"Using MQTT authentication with user: {MQTT_USER}")
-            self.mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+        if self.mqtt_user and self.mqtt_password:
+            logger.info(f"Using MQTT authentication with user: {self.mqtt_user}")
+            self.mqtt_client.username_pw_set(self.mqtt_user, self.mqtt_password)
         else:
             logger.info("Using MQTT without authentication (anonymous)")
 
@@ -99,12 +67,57 @@ class MidCityUtilitiesSensor:
 
         # Connect to MQTT broker
         try:
-            logger.info(f"Connecting to MQTT broker at {MQTT_HOST}:{MQTT_PORT}")
-            self.mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
+            logger.info(f"Connecting to MQTT broker at {self.mqtt_host}:{self.mqtt_port}")
+            self.mqtt_client.connect(self.mqtt_host, self.mqtt_port, 60)
             self.mqtt_client.loop_start()
         except Exception as e:
             logger.error(f"Failed to connect to MQTT broker: {e}")
             logger.error(f"Make sure Mosquitto broker add-on is installed and running")
+
+    def get_mqtt_config(self):
+        """Get MQTT configuration from Supervisor services API."""
+        try:
+            supervisor_token = os.environ.get('SUPERVISOR_TOKEN')
+            if not supervisor_token:
+                logger.warning("No SUPERVISOR_TOKEN found, trying default MQTT config")
+                return {
+                    'host': 'core-mosquitto',
+                    'port': 1883,
+                    'user': None,
+                    'password': None
+                }
+
+            headers = {
+                'Authorization': f'Bearer {supervisor_token}',
+                'Content-Type': 'application/json'
+            }
+
+            logger.info("Retrieving MQTT config from Supervisor...")
+            response = requests.get('http://supervisor/services/mqtt', headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                mqtt_config = response.json()['data']
+                logger.info(f"✓ Retrieved MQTT config from Supervisor")
+                logger.debug(f"MQTT config details: {mqtt_config}")
+                return mqtt_config
+            else:
+                logger.warning(f"Could not get MQTT config from Supervisor: {response.status_code}")
+                logger.warning(f"Response: {response.text}")
+                return {
+                    'host': 'core-mosquitto',
+                    'port': 1883,
+                    'user': None,
+                    'password': None
+                }
+        except Exception as e:
+            logger.warning(f"Error getting MQTT config from Supervisor: {e}")
+            logger.warning("Using default MQTT config")
+            return {
+                'host': 'core-mosquitto',
+                'port': 1883,
+                'user': None,
+                'password': None
+            }
 
     def on_mqtt_connect(self, client, userdata, flags, rc):
         """MQTT connection callback."""
@@ -632,7 +645,7 @@ class MidCityUtilitiesSensor:
                         "name": "MidCity Utilities Sensor",
                         "model": "MidCity Utilities Monitor",
                         "manufacturer": "MidCity Utilities",
-                        "sw_version": "1.2.1"
+                        "sw_version": "1.2.2"
                     }
                 }
 
