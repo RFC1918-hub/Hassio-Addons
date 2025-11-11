@@ -107,28 +107,72 @@ class MidCityUtilitiesSensor:
 
             # Find meter number
             meter_number = None
+
+            # Strategy 1: Look in "Select Meter" dropdown/text
             meter_select = soup.find(string=re.compile(r'Select Meter'))
             if meter_select:
                 match = re.search(r'(\d{8,12})', meter_select)
                 if match:
                     meter_number = match.group(1)
-                    logger.info(f"Found meter number: {meter_number}")
+                    logger.info(f"Found meter number in 'Select Meter': {meter_number}")
 
-            # Find current balance
+            # Strategy 2: Look in select/option elements
+            if not meter_number:
+                select_elem = soup.find('select', {'name': 'meter_id'})
+                if select_elem:
+                    options = select_elem.find_all('option')
+                    for option in options:
+                        if option.get('value') and re.match(r'\d{8,12}', option.get('value')):
+                            meter_number = option.get('value')
+                            logger.info(f"Found meter number in select option: {meter_number}")
+                            break
+
+            # Strategy 3: Look anywhere in the page for meter number patterns
+            if not meter_number:
+                page_text = soup.get_text()
+                match = re.search(r'(?:Meter|Account)[^\d]*(\d{10,12})', page_text, re.I)
+                if match:
+                    meter_number = match.group(1)
+                    logger.info(f"Found meter number in page text: {meter_number}")
+
+            # Find current balance - it's embedded in JavaScript JSON
             balance = None
             unit = None
-            balance_text_elem = soup.find(string=re.compile(r'Current meter balance', re.I))
-            if balance_text_elem:
-                balance_text = balance_text_elem.strip()
-                logger.debug(f"Found balance text: {balance_text}")
 
-                # Extract kWh balance
-                match = re.search(r'([\d,]+\.?\d*)\s*kWh', balance_text, re.I)
-                if match:
-                    balance_str = match.group(1).replace(',', '')
-                    balance = float(balance_str)
-                    unit = 'kWh'
-                    logger.info(f"Found balance: {balance} {unit}")
+            # Strategy 1: Look for balance in JavaScript chartObjects
+            scripts = soup.find_all('script')
+            for script in scripts:
+                if script.string and 'chartObjects' in script.string:
+                    script_text = script.string
+                    # Look for the series data with balance
+                    # Pattern: "series":[{"name":"Current balance","0":[145.65],"tooltip":{"valueSuffix":" kWh"}}]
+                    match = re.search(r'"name":"Current balance"[^}]*?"0":\[([0-9.]+)\]', script_text)
+                    if match:
+                        balance = float(match.group(1))
+                        unit = 'kWh'
+                        logger.info(f"Found balance in JavaScript: {balance} {unit}")
+                        break
+
+                    # Alternative pattern
+                    match = re.search(r'"series":\[{[^}]*?"0":\[([0-9.]+)\][^}]*?"valueSuffix":" kWh"', script_text)
+                    if match:
+                        balance = float(match.group(1))
+                        unit = 'kWh'
+                        logger.info(f"Found balance in JavaScript (alt): {balance} {unit}")
+                        break
+
+            # Strategy 2: Look for balance in HTML text (fallback)
+            if not balance:
+                balance_text_elem = soup.find(string=re.compile(r'Current meter balance[:\s]+[\d.]+\s*kWh', re.I))
+                if balance_text_elem:
+                    balance_text = balance_text_elem.strip()
+                    logger.debug(f"Found balance text in HTML: {balance_text}")
+                    match = re.search(r'([\d,]+\.?\d*)\s*kWh', balance_text, re.I)
+                    if match:
+                        balance_str = match.group(1).replace(',', '')
+                        balance = float(balance_str)
+                        unit = 'kWh'
+                        logger.info(f"Found balance in HTML: {balance} {unit}")
 
             # Create meter data if we found both
             meters = []

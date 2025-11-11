@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6] - 2025-11-11
+
+### Fixed
+- Balance extraction now parses JavaScript chartObjects JSON data
+- Balance value is embedded in script tags, not HTML text
+- Extract from pattern: "name":"Current balance","0":[145.65]
+- Multiple fallback strategies for balance and meter number
+
+### Improved
+- Enhanced meter number search with 3 strategies
+- Look in select/option elements for meter_id
+- Search page text for meter/account numbers as fallback
+- Better debug logging showing which extraction method succeeded
+
 ## [1.0.5] - 2025-11-11
 
 ### Fixed
