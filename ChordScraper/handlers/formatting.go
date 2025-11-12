@@ -97,8 +97,6 @@ func FormatWithNashville(songName, artistName, key, content string) string {
 	}
 
 	output.WriteString("Key: " + keyToUse + "\n")
-	output.WriteString("Tempo: 100 BPM\n")
-	output.WriteString("Time Signature: 4/4\n")
 	output.WriteString("\n")
 
 	// Add the content
