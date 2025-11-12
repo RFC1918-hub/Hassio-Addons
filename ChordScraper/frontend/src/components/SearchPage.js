@@ -26,6 +26,7 @@ import {
 import { Search as SearchIcon, CloudUpload, MusicNote, Star } from '@mui/icons-material';
 import axios from 'axios';
 import debounce from 'lodash/debounce';
+import { getOnSongFormat } from '../api';
 
 const API_URL = window.location.origin;
 
@@ -127,12 +128,19 @@ function SearchPage() {
       return;
     }
 
+    // Convert to integer and validate
+    const tabIdNumber = parseInt(ugTabId, 10);
+    if (isNaN(tabIdNumber) || tabIdNumber <= 0) {
+      showSnackbar('Please enter a valid numeric tab ID', 'error');
+      return;
+    }
+
     try {
       setLoadingUgTab(true);
-      const response = await axios.post(`${API_URL}/onsong`, { id: ugTabId });
+      const onsongData = await getOnSongFormat(tabIdNumber);
 
       // Try to extract song/artist info from the formatted content
-      const lines = response.data.split('\n');
+      const lines = onsongData.split('\n');
       let song = 'Unknown Song';
       let artist = 'Unknown Artist';
 
@@ -145,14 +153,13 @@ function SearchPage() {
       }
 
       setSelectedTab({ song, artist, id: ugTabId });
-      setOnsongContent(response.data);
+      setOnsongContent(onsongData);
       setModalOpen(true);
       setUgTabId(''); // Clear the input after successful fetch
+      showSnackbar('Tab loaded successfully', 'success');
     } catch (error) {
       showSnackbar(
-        typeof error.response?.data === 'string'
-          ? error.response.data
-          : error.response?.data?.message || 'Failed to get tab by ID',
+        error.message || 'Failed to get tab by ID',
         'error'
       );
     } finally {
