@@ -21,21 +21,7 @@ n8n is a fair-source-licensed workflow automation tool. It helps you to connect 
 
 ## Configuration
 
-### Options
-
-- `n8n_host` (optional): The hostname or domain where n8n will be accessible (e.g., "n8n.example.com" or "192.168.1.100:5678")
-- `n8n_protocol` (optional): Protocol to use - either "http" or "https" (default: "http")
-- `timezone` (optional): Timezone for n8n (default: "UTC")
-
-### Example configuration:
-
-```yaml
-n8n_host: "n8n.example.com"
-n8n_protocol: "https"
-timezone: "America/New_York"
-```
-
-If `n8n_host` is not set, n8n will use the local access URL. Set this to your external domain/hostname if you want webhooks and external integrations to work properly.
+No configuration needed. The add-on runs with default settings and is accessible via localhost on port 5678.
 
 ## Support
 

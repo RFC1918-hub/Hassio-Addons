@@ -1,5 +1,5 @@
 name: n8n - Workflow Automation
-version: 1.118.2
+version: 1.119.0
 slug: n8n
 description: n8n workflow automation tool - always pulls latest version from official Docker image
 url: https://github.com/RFC1918-hub/Hassio-Add-ons
@@ -15,11 +15,11 @@ ports:
   5678/tcp: 5678
 ports_description:
   5678/tcp: n8n web interface
-options:
-  n8n_host: ""
-  n8n_protocol: "http"
-  timezone: "UTC"
-schema:
-  n8n_host: str?
-  n8n_protocol: list(http|https)?
-  timezone: str?
+environment:
+  GENERIC_TIMEZONE: "UTC"
+  TZ: "UTC"
+  N8N_USER_FOLDER: "/data"
+  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
+  N8N_RUNNERS_ENABLED: "true"
+  N8N_TRUSTED_PROXY_IPS: "*"
+  NODE_ENV: "production"
