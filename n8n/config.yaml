@@ -1,5 +1,5 @@
 name: n8n - Workflow Automation
-version: 1.118.1
+version: 1.118.2
 slug: n8n
 description: n8n workflow automation tool - always pulls latest version from official Docker image
 url: https://github.com/RFC1918-hub/Hassio-Add-ons

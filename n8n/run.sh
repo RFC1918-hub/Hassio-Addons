@@ -1,5 +1,7 @@
 #!/usr/bin/with-contenv bashio
 
+bashio::log.info "Starting n8n..."
+
 # Read configuration from Home Assistant
 N8N_HOST=$(bashio::config 'n8n_host')
 N8N_PROTOCOL=$(bashio::config 'n8n_protocol')
@@ -35,8 +37,6 @@ fi
 
 # Ensure data directory exists
 mkdir -p /data
-
-bashio::log.info "Starting n8n..."
 
 # Start n8n
 exec n8n start

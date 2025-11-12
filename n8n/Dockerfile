@@ -13,17 +13,13 @@ COPY --from=n8n /usr/local/bin/n8n /usr/local/bin/n8n
 # Install Node.js and npm
 RUN apk add --no-cache \
     nodejs \
-    npm \
-    bash \
-    jq
+    npm
 
 # Set n8n to use /data
 ENV N8N_USER_FOLDER=/data
 ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
 
-# Copy start script
-COPY start.sh /
-RUN chmod a+x /start.sh
-
-# Set the entrypoint
-CMD ["/start.sh"]
+# Create S6 service directory and copy run script
+RUN mkdir -p /etc/services.d/n8n
+COPY run.sh /etc/services.d/n8n/run
+RUN chmod a+x /etc/services.d/n8n/run
