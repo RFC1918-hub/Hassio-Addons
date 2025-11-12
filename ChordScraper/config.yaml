@@ -1,5 +1,5 @@
 name: Chord Scraper
-version: 4.2.0
+version: 4.3.0
 slug: chord-scraper
 description: Guitar tabs & worship chords scraper with chord analysis and OnSong export
 url: https://github.com/RFC1918-hub/Hassio-Add-ons/Chord-Scraper
@@ -18,9 +18,7 @@ ports_description:
   3000/tcp: Web interface
 options:
   webhook_url: "https://n8n-058ea47.peakhq.co.za/webhook/7da5ea58-40bd-4470-8347-e4fc3d7dd1c4"
-  allowed_origins: "http://localhost:3000,http://127.0.0.1:3000,https://chords.peakhq.co.za"
 schema:
   webhook_url: str?
-  allowed_origins: str?
 environment:
   TZ: "Africa/Johannesburg"
