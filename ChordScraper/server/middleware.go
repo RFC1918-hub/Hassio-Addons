@@ -3,13 +3,10 @@ package server
 import (
 	"log"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/RFC1918-hub/Hassio-Add-ons/chord-scraper/config"
-	"github.com/rs/cors"
 	"golang.org/x/time/rate"
 )
 
@@ -42,60 +39,6 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 			}
 		}()
 		next.ServeHTTP(w, r)
-	})
-}
-
-// CORSMiddleware creates a CORS handler with allowed origins
-func CORSMiddleware(cfg *config.Config) *cors.Cors {
-	return cors.New(cors.Options{
-		AllowedOrigins: cfg.AllowedOrigins,
-		AllowedMethods: []string{
-			http.MethodGet,
-			http.MethodPost,
-			http.MethodPut,
-			http.MethodDelete,
-			http.MethodOptions,
-		},
-		AllowedHeaders: []string{
-			"Accept",
-			"Authorization",
-			"Content-Type",
-			"X-CSRF-Token",
-		},
-		ExposedHeaders:     []string{"Link"},
-		AllowCredentials:   true,
-		MaxAge:             300, // 5 minutes
-		OptionsPassthrough: false,
-		Debug:              false,
-		// Custom origin validator to support wildcard patterns
-		AllowOriginFunc: func(origin string) bool {
-			// Allow requests with no origin (same-origin, mobile apps, curl)
-			if origin == "" {
-				return true
-			}
-
-			// Check against allowed origins
-			for _, allowed := range cfg.AllowedOrigins {
-				// Support wildcard subdomain matching
-				if strings.Contains(allowed, "*") {
-					pattern := strings.ReplaceAll(allowed, ".", "\\.")
-					pattern = strings.ReplaceAll(pattern, "*", ".*")
-					pattern = "^" + pattern + "$"
-
-					matched, err := regexp.MatchString(pattern, origin)
-					if err == nil && matched {
-						log.Printf("CORS allowed origin (wildcard): %s", origin)
-						return true
-					}
-				} else if allowed == origin {
-					log.Printf("CORS allowed origin: %s", origin)
-					return true
-				}
-			}
-
-			log.Printf("CORS blocked origin: %s", origin)
-			return false
-		},
 	})
 }
 

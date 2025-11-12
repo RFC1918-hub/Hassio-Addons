@@ -39,10 +39,6 @@ func (s *Server) Start() error {
 	rateLimiter := NewRateLimiter(s.config.RateLimit.MaxRequests, s.config.RateLimit.WindowMinutes)
 	handler = rateLimiter.Middleware(handler)
 
-	// Apply CORS
-	corsHandler := CORSMiddleware(s.config)
-	handler = corsHandler.Handler(handler)
-
 	// Configure HTTP server
 	s.httpServer = &http.Server{
 		Addr:           fmt.Sprintf("0.0.0.0:%d", s.config.Port),
