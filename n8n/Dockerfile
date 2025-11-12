@@ -1,7 +1,10 @@
 ARG BUILD_FROM=ghcr.io/hassio-addons/base:16.3.2
-FROM docker.n8n.io/n8nio/n8n:latest as n8n
+FROM docker.n8n.io/n8nio/n8n:latest AS n8n
 
 FROM ${BUILD_FROM}
+
+# Switch to root to install packages
+USER root
 
 # Copy n8n from the official image
 COPY --from=n8n /usr/local/lib/node_modules/n8n /usr/local/lib/node_modules/n8n
