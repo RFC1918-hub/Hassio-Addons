@@ -10,7 +10,7 @@ n8n is a fair-source-licensed workflow automation tool. It helps you to connect 
 - 200+ nodes to automate tasks
 - Self-hosted
 - Real-time workflow execution
-- Version 3.0.0
+- Always runs the latest n8n version from official Docker image
 
 ## Installation
 
