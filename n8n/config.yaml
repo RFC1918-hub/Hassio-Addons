@@ -23,3 +23,5 @@ environment:
   N8N_RUNNERS_ENABLED: "true"
   N8N_TRUSTED_PROXY_IPS: "*"
   NODE_ENV: "production"
+  WEBHOOK_URL: "https://n8n.peakhq.co.za/"
+  N8N_EDITOR_BASE_URL: "https://n8n.peakhq.co.za/"
